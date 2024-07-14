@@ -32,7 +32,7 @@ Paste the following code into your devspace.yaml file:
 
 ```
 imports:
-  - git: github.com/momsdish-corp/public-devspace.git
+  - git: https://github.com/momsdish-corp/public-devspace.git
     branch: main
     subPath: base.yaml
 
