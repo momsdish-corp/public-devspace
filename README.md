@@ -1,11 +1,12 @@
 ## Description
 This is an opinionated base devspace.yaml configuration commonly used functions.
 
+Refer to [REF.md](REF.md) for a list of available functions.
+
 ## Commands
 - `devspace run reset` - deletes the namespace.
 
-
-## Structure
+## devspace.yaml Structure & Logic
 - `functions` - shared helpers for pipelines.
 - `pipelines` - where the logic happens.
 - `commands` - essentially, wrappers for pipelines, meant to be used in dev environment only.
