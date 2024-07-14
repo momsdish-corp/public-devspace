@@ -1,0 +1,349 @@
+version: v2beta1
+name: devspace
+
+functions:
+  # Waits for the pod to be ready. If not ready, it will output all logs and exit with an error.
+  # $POD_NAME - name of the pod to wait for
+  # $TIMEOUT - (optional) (default: 60) timeout in seconds
+  # $REF_COMMAND - (optional) Name of the referring command. This will be printed in the logs.
+  wait_for_pod_ready_or_debug: |-
+    POD_NAME="$1"
+    [[ -n $2 ]] && TIMEOUT=$2 || TIMEOUT=60
+    REF_COMMAND="$3"
+    [[ -n $REF_COMMAND ]] && THIS_COMMAND_PREFIX="$REF_COMMAND > " || THIS_COMMAND_PREFIX=""
+    THIS_COMMAND="${THIS_COMMAND_PREFIX}wait_for_pod_ready_or_debug"
+    echo ">> $THIS_COMMAND: Running wait_for_pod_ready_or_debug() $@"
+
+    # Validate pod name
+    if [ -z "$POD_NAME" ]; then
+      echo ">> $THIS_COMMAND: Error! Pod name not set."
+      exit 1
+    fi
+
+    echo ">> $THIS_COMMAND: Waiting for pod $POD_NAME condition to be ready"
+
+    if ! kubectl wait --namespace=${APP_NAME} --for=condition=Ready pod/$POD_NAME --timeout=${TIMEOUT}s > /dev/null 2>&1; then
+      echo ">> $THIS_COMMAND: Error! Pod $POD_NAME failed to start."
+      if ! kubectl get pod --namespace=${APP_NAME} $POD_NAME --output name > /dev/null 2>&1; then
+        echo ">> $THIS_COMMAND: Error! Pod $POD_NAME not found."
+        exit 1
+      else
+        echo ">> $THIS_COMMAND: Printing debug pod/$POD_NAME"
+        kubectl_describe $POD_NAME "$THIS_COMMAND"
+        kubectl_logs $POD_NAME all "$THIS_COMMAND"
+        kubectl_describe $POD_NAME "$THIS_COMMAND"
+        kubectl_status $POD_NAME "$THIS_COMMAND"
+        kubectl_events "$THIS_COMMAND"
+        exit 1
+      fi
+    fi
+  # Wait for the pod to be ready for exec. If not ready, it will output all logs and exit with an error.
+  # $POD_NAME - name of the pod to wait for
+  # $CONTAINER_NAME - name of the container to wait for
+  # $CONTAINER_TYPE - (optional) (default: container) type of the container to wait for, i.e. initContainer, container
+  # $TIMEOUT - (optional) (default: 60) timeout in seconds
+  # $REF_COMMAND - (optional) Name of the referring command. This will be printed in the logs.
+  wait_for_pod_exec_or_debug: |-
+    POD_NAME="$1"
+    CONTAINER_NAME="$2"
+    [[ -n $3 ]] && CONTAINER_TYPE="$3" || CONTAINER_TYPE="container"
+    [[ -n $4 ]] && TIMEOUT=$4 || TIMEOUT=60
+    REF_COMMAND="$5"
+    [[ -n $REF_COMMAND ]] && THIS_COMMAND_PREFIX="$REF_COMMAND > " || THIS_COMMAND_PREFIX=""
+    THIS_COMMAND="${THIS_COMMAND_PREFIX}wait_for_pod_exec_or_debug"
+    echo ">> $THIS_COMMAND: Running wait_for_pod_exec_or_debug() $@"
+    START_TIME=$(date +%s)
+
+    # Validate pod name
+    if [ -z "$POD_NAME" ]; then
+      echo ">> $THIS_COMMAND: Error! Pod name not set."
+      exit 1
+    fi
+
+    # Validate container name
+    if [ -z "$CONTAINER_NAME" ]; then
+      echo ">> $THIS_COMMAND: Error! Container name not set."
+      exit 1
+    fi
+
+    # Validate container type
+    if [ "$CONTAINER_TYPE" != "initContainer" ] && [ "$CONTAINER_TYPE" != "container" ]; then
+      echo ">> $THIS_COMMAND: Error! Container type must be either initContainer or container."
+      exit 1
+    fi
+
+    echo ">> $THIS_COMMAND: Waiting for pod $POD_NAME to be exec ready"
+    while true; do
+      if [[ "$CONTAINER_TYPE" == "initContainer" ]]; then
+        CONTAINER_STARTED="$(kubectl get --namespace=${APP_NAME} pod/$POD_NAME --output jsonpath='{.status.initContainerStatuses[?(@.name=="'$CONTAINER_NAME'")].state.running.startedAt}')"
+      else
+        CONTAINER_STARTED="$(kubectl get --namespace=${APP_NAME} pod/$POD_NAME --output jsonpath='{.status.containerStatuses[?(@.name=="'$CONTAINER_NAME'")].state.running.startedAt}')"
+      fi
+      if [[ -n "$CONTAINER_STARTED" ]] && [[ $(kubectl exec --namespace=${APP_NAME} $POD_NAME --container $CONTAINER_NAME -- echo "works") == "works" ]]; then
+        echo ">> $THIS_COMMAND: Pod $POD_NAME is ready for exec"
+        break
+      else
+        sleep 1
+        now=$(date +%s)
+        if [ $(($now - $START_TIME)) -gt $TIMEOUT ]; then
+          echo ">> $THIS_COMMAND: Error! Pod $POD_NAME failed to start."
+          if ! kubectl get pod --namespace=${APP_NAME} $POD_NAME --output name > /dev/null 2>&1; then
+            echo ">> $THIS_COMMAND: Error! Pod $POD_NAME not found."
+            exit 1
+          else
+            echo ">> $THIS_COMMAND: Printing debug pod/$POD_NAME"
+            kubectl_list_pods "$THIS_COMMAND"
+            kubectl_logs $POD_NAME all "$THIS_COMMAND"
+            kubectl_describe $POD_NAME "$THIS_COMMAND"
+            kubectl_status $POD_NAME "$THIS_COMMAND"
+            kubectl_events "$THIS_COMMAND"
+            exit 1
+          fi
+        fi
+      fi
+    done
+  # Print the logs of a pod, until /tmp/.started appears
+  # $POD_NAME - name of the pod to print logs for
+  # $CONTAINER - Name of the container to print logs for. If "all", it will print logs for all containers.
+  # $TIMEOUT - (optional) (default: 60) timeout in seconds
+  # $REF_COMMAND - (optional) Name of the referring command. This will be printed in the logs.
+  kubectl_follow_logs_until_starting: |-
+    POD_NAME="$1"
+    CONTAINER="$2"
+    [[ -n $3 ]] && TIMEOUT=$3 || TIMEOUT=60
+    [[ -n $4 ]] && REF_COMMAND="$4" || REF_COMMAND=""
+    [[ -n $REF_COMMAND ]] && THIS_COMMAND_PREFIX="$REF_COMMAND > " || THIS_COMMAND_PREFIX=""
+    THIS_COMMAND="${THIS_COMMAND_PREFIX}kubectl_follow_logs_until_starting"
+    echo ">> $THIS_COMMAND: Running kubectl_follow_logs_until_starting() $@"
+    # Validate pod name
+    require_vars POD_NAME CONTAINER
+    [ "$CONTAINER" == "all" ] && \
+      CONTAINER_FLAG="--all-containers=true" || \
+        CONTAINER_FLAG="--container=$CONTAINER"
+    # Follow logs in the background
+    echo ">> $THIS_COMMAND: Following logs for pod/$POD_NAME $CONTAINER_FLAG"
+    kubectl logs --namespace=${APP_NAME} $CONTAINER_FLAG $POD_NAME --follow &
+    # Wait for /tmp/.started to exist
+    START_TIME=$(date +%s)
+    while true; do
+      if kubectl exec --namespace=${APP_NAME} $POD_NAME --container $CONTAINER -- test -f /tmp/.started 2>/dev/null; then
+        echo ">> $THIS_COMMAND: Found /tmp/.started. Exiting."
+        break
+      else
+        sleep 1
+        now=$(date +%s)
+        if [ $(($now - $START_TIME)) -gt $TIMEOUT ]; then
+          echo ">> $THIS_COMMAND: Error! Timeout waiting for /tmp/.started to appear."
+          exit 1
+        fi
+      fi
+    done
+    # Kill all background processes showing logs
+    PIDS="$(ps -A -o pid,args | grep " kubectl logs --namespace=${APP_NAME} $CONTAINER_FLAG $POD_NAME --follow$" | awk '{print $1}' | sort | uniq)"
+    echo ">> $THIS_COMMAND: Killing the log following processes"
+    for PID in $PIDS; do
+      echo ">> $THIS_COMMAND: Killing PID $PID"
+      kill $PID || true
+    done
+  # List all pods in the namespace
+  # $REF_COMMAND - (optional) Name of the referring command. This will be printed in the logs.
+  kubectl_list_pods: |-
+    [[ -n $1 ]] && REF_COMMAND="$1" || REF_COMMAND=""
+    [[ -n $REF_COMMAND ]] && THIS_COMMAND_PREFIX="$REF_COMMAND > " || THIS_COMMAND_PREFIX=""
+    THIS_COMMAND="${THIS_COMMAND_PREFIX}kubectl_list_pods"
+    echo ">> $THIS_COMMAND: Running kubectl_list_pods() $@"
+
+    # List all pods
+    echo ">> $THIS_COMMAND: Listing all pods in namespace ${APP_NAME}"
+    kubectl get --namespace=${APP_NAME} pods || echo ">> $THIS_COMMAND: Error! Failed to list pods in namespace ${APP_NAME}"
+  # Print logs for a pod
+  # $POD_NAME - name of the pod to print logs for
+  # $CONTAINER - Name of the container to print logs for. If "all", it will print logs for all containers.
+  # $REF_COMMAND - (optional) Name of the referring command. This will be printed in the logs.
+  kubectl_logs: |-
+    POD_NAME="$1"
+    CONTAINER="$2"
+    [[ -n $3 ]] && REF_COMMAND="$3" || REF_COMMAND=""
+    [[ -n $REF_COMMAND ]] && THIS_COMMAND_PREFIX="$REF_COMMAND > " || THIS_COMMAND_PREFIX=""
+    THIS_COMMAND="${THIS_COMMAND_PREFIX}kubectl_logs"
+    echo ">> $THIS_COMMAND: Running kubectl_logs() $@"
+
+    # Validate pod name
+    require_vars POD_NAME CONTAINER
+
+    [ "$CONTAINER" == "all" ] && \
+      CONTAINER_FLAG="--all-containers=true" || \
+        CONTAINER_FLAG="--container=$CONTAINER"
+
+    # Print logs
+    echo ">> $THIS_COMMAND: Printing logs for pod/$POD_NAME $CONTAINER_FLAG"
+    kubectl logs --namespace=${APP_NAME} $CONTAINER_FLAG $POD_NAME || echo ">> $THIS_COMMAND: Error! Failed to print logs for pod/$POD_NAME $CONTAINER_FLAG"
+  # Describe pod
+  # $POD_NAME - name of the pod to describe
+  # $REF_COMMAND - (optional) Name of the referring command. This will be printed in the logs.
+  kubectl_describe: |-
+    POD_NAME="$1"
+    [[ -n $2 ]] && REF_COMMAND="$2" || REF_COMMAND=""
+    [[ -n $REF_COMMAND ]] && THIS_COMMAND_PREFIX="$REF_COMMAND > " || THIS_COMMAND_PREFIX=""
+    THIS_COMMAND="${THIS_COMMAND_PREFIX}kubectl_describe"
+    echo ">> $THIS_COMMAND: Running kubectl_describe() $@"
+
+    # Validate pod name
+    require_vars POD_NAME
+
+    # Describe pod
+    echo ">> $THIS_COMMAND: Running 'kubectl describe' on pod/$POD_NAME"
+    kubectl describe --namespace=${APP_NAME} pod $POD_NAME || echo ">> $THIS_COMMAND: Error! Failed to describe pod/$POD_NAME"
+  # Print status for a pod
+  # $POD_NAME - name of the pod to print status for
+  # $REF_COMMAND - (optional) Name of the referring command. This will be printed in the logs.
+  kubectl_status: |-
+    POD_NAME="$1"
+    [[ -n $2 ]] && REF_COMMAND="$2" || REF_COMMAND=""
+    [[ -n $REF_COMMAND ]] && THIS_COMMAND_PREFIX="$REF_COMMAND > " || THIS_COMMAND_PREFIX=""
+    THIS_COMMAND="${THIS_COMMAND_PREFIX}kubectl_status"
+    echo ">> $THIS_COMMAND: Running kubectl_status() $@"
+
+    # Validate pod name
+    require_vars POD_NAME
+
+    # Print status
+    echo ">> $THIS_COMMAND: Printing status for pod/$POD_NAME"
+    kubectl get --namespace=${APP_NAME} pod $POD_NAME --output jsonpath='{.status}' || echo ">> $THIS_COMMAND: Error! Failed to print status for pod/$POD_NAME"
+  # Print events for a pod
+  # $REF_COMMAND - (optional) Name of the referring command. This will be printed in the logs.
+  kubectl_events: |-
+    [[ -n $1 ]] && REF_COMMAND="$1" || REF_COMMAND=""
+    [[ -n $REF_COMMAND ]] && THIS_COMMAND_PREFIX="$REF_COMMAND > " || THIS_COMMAND_PREFIX=""
+    THIS_COMMAND="${THIS_COMMAND_PREFIX}kubectl_events"
+    echo ">> $THIS_COMMAND: Running kubectl_events() $@"
+
+    # Print events
+    echo ">> $THIS_COMMAND: Printing events"
+    kubectl get --namespace=${APP_NAME} events || echo ">> $THIS_COMMAND: Error! Failed to print events"
+  # Output the pod name or return error
+  # $LABEL_VALUE - Name of the label, i.e app.kubernetes.io/component=wordpress
+  # $TIMEOUT - (optional) (default: 1) timeout in seconds
+  get_pod_by_label: |-
+    LABEL_VALUE="$1"
+    [[ -n $2 ]] && TIMEOUT=$2 || TIMEOUT=0
+    START_TIME=$(date +%s)
+
+    while true; do
+      # Retrieve a pod (limit 1) by name, excluding Terminating pods
+      POD_NAME=$(kubectl get pod --namespace=${APP_NAME} --selector $LABEL_VALUE --no-headers 2>/dev/null | awk '$3 != "Terminating" {print $1}' | head -n 1)
+      [ -n "$POD_NAME" ] && echo "$POD_NAME" && break
+      sleep 1
+      now=$(date +%s)
+      if [ $(($now - $START_TIME)) -gt $TIMEOUT ]; then
+        exit 1
+      fi
+    done
+  # Require variables to be set
+  # $REQUIRE_VARS - Array of variables to check
+  require_vars: |-
+    REQUIRE_VARS=("${@}")
+    for REQUIRE_VAR in ${REQUIRE_VARS[@]}; do
+      [[ ! "${!REQUIRE_VAR}" ]] \
+        && echo "Error! $REQUIRE_VAR is not set. Exiting..." \
+        && exit 1
+      required_dummy=""
+    done
+  # Must be run at the beginning of every pipeline
+  # $COMMAND - Name of the command
+  # $FLAGS - (optional) Flags to pass to the command
+  pipeline_start: |-
+    COMMAND="$1"
+    FLAGS="${@: 1}"
+    require_vars COMMAND
+    echo ">> $COMMAND: STARTING PIPELINE $COMMAND $FLAGS"
+    # Enforce a namespace
+    if [ ${APP_NAME} != ${DEVSPACE_NAMESPACE} ]; then
+      # Do not switch the namespace here, as it will still save the original deployment under the wrong namespace, causing things like `devspace purge` not to work
+      # Instead require the person to manually switch the namespace
+      echo ">> $COMMAND: Error! Before running this command, you must switch to the correct namespace by running 'devspace use namespace ${APP_NAME}'."
+      #kubectl create namespace ${APP_NAME} --dry-run=client -o yaml | kubectl apply -f -
+      #devspace use namespace ${APP_NAME}
+      exit 1
+    fi
+  # Must be run at the end of every pipeline
+  # $COMMAND - Name of the command
+  pipeline_end: |-
+    COMMAND="$1"
+    require_vars COMMAND
+    echo ">> $COMMAND: COMPLETED PIPELINE"
+  # Log pipeline messages
+  # $COMMAND - Name of the command
+  # $MESSAGE - Message to log
+  pipeline_print: |-
+    COMMAND="$1"
+    MESSAGE="$2"
+    require_vars COMMAND MESSAGE
+    echo ">> $COMMAND: $MESSAGE"
+  # Print pipeline flags. Used by pipelines to declare the command.
+  # $FLAG_NAMES - Array of flag names to print. If the flag name begins with a dash, the value will be hidden.
+  # Example: pipeline_start my-pipeline $(pipeline_print_flags non-hidden-flag -hidden-flag)
+  pipeline_print_flags: |-
+    FLAG_NAMES="$@"
+    FLAGS=""
+    for FLAG_NAME in $FLAG_NAMES; do
+      # If the flag value is empty, skip it
+      [[ -n $FLAG_VALUE ]] && continue
+      # If the flag name begins with a dash, hide the value
+      if [[ $FLAG_NAME == -* ]]; then
+        FLAG_NAME="${FLAG_NAME:1}" # Remove the dash
+        IS_HIDDEN=true
+      else
+        IS_HIDDEN=false
+      fi
+      # Build Output
+      if [[ $IS_HIDDEN == true ]]; then
+        FLAGS="${FLAGS}--$FLAG_NAME==*** "
+      else
+        FLAG_VALUE=$(get_flag $FLAG_NAME)
+        FLAGS="${FLAGS}--$FLAG_NAME=$FLAG_VALUE "
+      fi
+    done
+
+    echo "$FLAGS"
+
+commands:
+  # Keep all commands restricted to the dev environment. Production workflows must use pipelines.
+  # Each command must start with
+  # [ -n "${DEVSPACE_PROFILE}" ] && echo "Error! Commands must be run in Dev environment only." && exit 1
+  reset:
+    description: Resets the deployment by deleting the namespace from the kubernetes instance.
+    command: |-
+      [ -n "${DEVSPACE_PROFILE}" ] && echo "Error! Commands must be run in Dev environment only." && exit 1
+      echo "Deleting the namespace. This may take 30-60 seconds."
+      kubectl --ignore-not-found=true delete namespace ${APP_NAME}
+
+require:
+  commands:
+    # kubectl command
+    - name: kubectl
+      versionRegEx: "Client Version: (v?\\d+\\.\\d+\\.\\d+)"
+      version: ">=v1.28"
+    # kubernetes instance
+    - name: kubectl
+      versionRegEx: "Server Version: (v?\\d+\\.\\d+\\.\\d+)"
+      version: ">=v1.28"
+    # helm command
+    - name: helm
+      versionRegEx: "version.BuildInfo{Version:\"v(\\d+\\.\\d+\\.\\d+)\""
+      version: ">=v3.7.0"
+vars:
+  DEVSPACE_ENV_FILE: ".env"
+  # Get project root directory, Windows compatible
+  PROJECT_ROOT_DIR:
+    command: pwd
+    commands:
+      - os: windows
+        command: wsl --exec pwd
+  # DevSpace Settings
+  APP_NAME:
+    # Default to Repo Name
+    command: basename -s .git $(git config --get remote.origin.url)
+    commands:
+      - os: windows
+        command: wsl --exec basename -s .git $(git config --get remote.origin.url)
