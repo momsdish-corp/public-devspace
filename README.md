@@ -1,0 +1,1 @@
+This repo includes a shared devspace.yaml file with commonly shared functions.
