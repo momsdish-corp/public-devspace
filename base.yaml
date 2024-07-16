@@ -141,11 +141,16 @@ functions:
     # Follow logs
     echo ">> $THIS_COMMAND: Following logs for pod/$POD_NAME --all-containers=true"
     kubectl logs --namespace=${APP_NAME} --all-containers=true $POD_NAME --follow &
+    sleep 1
     # Wait for $FILE_PATH to exist
     while true; do
       # If pod doesnt exist, exit
       if ! kubectl get pod --namespace=${APP_NAME} $POD_NAME --output name > /dev/null 2>&1; then
         echo ">> $THIS_COMMAND: Error! Pod $POD_NAME not found. Exiting."
+        exit 1
+      # If the pod is not running, exit
+      elif [[ "$(kubectl get --namespace=${APP_NAME} pod/$POD_NAME -o jsonpath='{.status.phase}')" != "Running" ]]; then
+        echo ">> $THIS_COMMAND: Error! Pod $POD_NAME is not running. Exiting."
         exit 1
       elif kubectl exec --namespace=${APP_NAME} $POD_NAME --container $CONTAINER -- test -f "$FILE_PATH" 2>/dev/null; then
         echo ">> $THIS_COMMAND: Found $FILE_PATH. Exiting."
