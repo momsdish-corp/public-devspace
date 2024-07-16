@@ -120,10 +120,28 @@ functions:
     # Validate pod name
     require_vars POD_NAME CONTAINER
     # Follow logs in the background
-    echo ">> $THIS_COMMAND: Following logs for pod/$POD_NAME $CONTAINER_FLAG"
-    kubectl logs --namespace=${APP_NAME} $CONTAINER_FLAG $POD_NAME --follow &
-    # Wait for $FILE_PATH to exist
+    # Start the time
     START_TIME=$(date +%s)
+    # Wait until the container is created (otherwise logs will not be available)
+    while true; do
+      # If no longer waiting, break
+      if [[ -z "$(kubectl get --namespace=${APP_NAME} pod/$POD_NAME -o jsonpath='{.status.containerStatuses[?(@.name=="'$CONTAINER'")].state.waiting}')" ]]; then
+        echo ">> $THIS_COMMAND: Container $CONTAINER is available.."
+        break
+      else
+        sleep 1
+        kubectl get --namespace=${APP_NAME} pod/$POD_NAME -o jsonpath='{.status.containerStatuses[?(@.name=="'$CONTAINER'")].state.waiting}'
+        now=$(date +%s)
+        if [ $(($now - $START_TIME)) -gt $TIMEOUT ]; then
+          echo ">> $THIS_COMMAND: Error! Timeout waiting for container $CONTAINER to start."
+          exit 1
+        fi
+      fi
+    done
+    # Follow logs
+    echo ">> $THIS_COMMAND: Following logs for pod/$POD_NAME --all-containers=true"
+    kubectl logs --namespace=${APP_NAME} --all-containers=true $POD_NAME --follow &
+    # Wait for $FILE_PATH to exist
     while true; do
       # If pod doesnt exist, exit
       if ! kubectl get pod --namespace=${APP_NAME} $POD_NAME --output name > /dev/null 2>&1; then
