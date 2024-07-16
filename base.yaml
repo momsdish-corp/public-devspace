@@ -102,16 +102,18 @@ functions:
         fi
       fi
     done
-  # Print the logs of a pod, until /tmp/.started appears
+  # Print the logs of a pod, until the specified file appears
+  # $FILE_PATH - absolute path of the file to wait for
   # $POD_NAME - name of the pod to print logs for
   # $CONTAINER - Name of the container to print logs for. If "all", it will print logs for all containers.
   # $TIMEOUT - (optional) (default: 60) timeout in seconds
   # $REF_COMMAND - (optional) Name of the referring command. This will be printed in the logs.
-  kubectl_follow_logs_until_starting: |-
-    POD_NAME="$1"
-    CONTAINER="$2"
-    [[ -n $3 ]] && TIMEOUT=$3 || TIMEOUT=60
-    [[ -n $4 ]] && REF_COMMAND="$4" || REF_COMMAND=""
+  kubectl_follow_logs_until_file_appears: |-
+    FILE_PATH="$1"
+    POD_NAME="$2"
+    CONTAINER="$3"
+    [[ -n $4 ]] && TIMEOUT=$4 || TIMEOUT=60
+    [[ -n $5 ]] && REF_COMMAND="$5" || REF_COMMAND=""
     [[ -n $REF_COMMAND ]] && THIS_COMMAND_PREFIX="$REF_COMMAND > " || THIS_COMMAND_PREFIX=""
     THIS_COMMAND="${THIS_COMMAND_PREFIX}kubectl_follow_logs_until_starting"
     echo ">> $THIS_COMMAND: Running kubectl_follow_logs_until_starting() $@"
@@ -123,17 +125,17 @@ functions:
     # Follow logs in the background
     echo ">> $THIS_COMMAND: Following logs for pod/$POD_NAME $CONTAINER_FLAG"
     kubectl logs --namespace=${APP_NAME} $CONTAINER_FLAG $POD_NAME --follow &
-    # Wait for /tmp/.started to exist
+    # Wait for $FILE_PATH to exist
     START_TIME=$(date +%s)
     while true; do
-      if kubectl exec --namespace=${APP_NAME} $POD_NAME --container $CONTAINER -- test -f /tmp/.started 2>/dev/null; then
-        echo ">> $THIS_COMMAND: Found /tmp/.started. Exiting."
+      if kubectl exec --namespace=${APP_NAME} $POD_NAME --container $CONTAINER -- test -f "FILE_PATH" 2>/dev/null; then
+        echo ">> $THIS_COMMAND: Found $FILE_PATH. Exiting."
         break
       else
         sleep 1
         now=$(date +%s)
         if [ $(($now - $START_TIME)) -gt $TIMEOUT ]; then
-          echo ">> $THIS_COMMAND: Error! Timeout waiting for /tmp/.started to appear."
+          echo ">> $THIS_COMMAND: Error! Timeout waiting for "FILE_PATH" to appear."
           exit 1
         fi
       fi
