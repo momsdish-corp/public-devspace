@@ -128,14 +128,14 @@ functions:
     # Wait for $FILE_PATH to exist
     START_TIME=$(date +%s)
     while true; do
-      if kubectl exec --namespace=${APP_NAME} $POD_NAME --container $CONTAINER -- test -f "FILE_PATH" 2>/dev/null; then
+      if kubectl exec --namespace=${APP_NAME} $POD_NAME --container $CONTAINER -- test -f "$FILE_PATH" 2>/dev/null; then
         echo ">> $THIS_COMMAND: Found $FILE_PATH. Exiting."
         break
       else
         sleep 1
         now=$(date +%s)
         if [ $(($now - $START_TIME)) -gt $TIMEOUT ]; then
-          echo ">> $THIS_COMMAND: Error! Timeout waiting for "FILE_PATH" to appear."
+          echo ">> $THIS_COMMAND: Error! Timeout waiting for "$FILE_PATH" to appear."
           exit 1
         fi
       fi
