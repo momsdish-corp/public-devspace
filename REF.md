@@ -18,8 +18,17 @@ Wait for the pod to be ready for exec. If not ready, it will output all logs and
 - `$TIMEOUT` - (optional) (default: 60) timeout in seconds
 - `$REF_COMMAND` - (optional) Name of the referring command. This will be printed in the logs.
 
+## kubectl_follow_logs
+Follow pod logs, until the pod finishes
+
+**Parameters:**
+- `$POD_NAME` - name of the pod to print logs for
+- `$CONTAINER` - name of the container to print logs for
+- `$TIMEOUT` - (optional) (default: 60) timeout in seconds
+- `$REF_COMMAND` - (optional) Name of the referring command. This will be printed in the logs.
+
 ## kubectl_follow_logs_until_file_appears
-Print the logs of a pod, until the specified file appears
+Follow pod logs, until the specified file appears
 
 **Parameters:**
 - `$FILE_PATH` - absolute path of the file to wait for
