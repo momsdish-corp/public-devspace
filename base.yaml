@@ -105,7 +105,7 @@ functions:
   # Print the logs of a pod, until the specified file appears
   # $FILE_PATH - absolute path of the file to wait for
   # $POD_NAME - name of the pod to print logs for
-  # $CONTAINER - Name of the container to print logs for. If "all", it will print logs for all containers.
+  # $CONTAINER - name of the container to print logs for
   # $TIMEOUT - (optional) (default: 60) timeout in seconds
   # $REF_COMMAND - (optional) Name of the referring command. This will be printed in the logs.
   kubectl_follow_logs_until_file_appears: |-
@@ -119,16 +119,17 @@ functions:
     echo ">> $THIS_COMMAND: Running kubectl_follow_logs_until_starting() $@"
     # Validate pod name
     require_vars POD_NAME CONTAINER
-    [ "$CONTAINER" == "all" ] && \
-      CONTAINER_FLAG="--all-containers=true" || \
-        CONTAINER_FLAG="--container=$CONTAINER"
     # Follow logs in the background
     echo ">> $THIS_COMMAND: Following logs for pod/$POD_NAME $CONTAINER_FLAG"
     kubectl logs --namespace=${APP_NAME} $CONTAINER_FLAG $POD_NAME --follow &
     # Wait for $FILE_PATH to exist
     START_TIME=$(date +%s)
     while true; do
-      if kubectl exec --namespace=${APP_NAME} $POD_NAME --container $CONTAINER -- test -f "$FILE_PATH" 2>/dev/null; then
+      # If pod doesnt exist, exit
+      if ! kubectl get pod --namespace=${APP_NAME} $POD_NAME --output name > /dev/null 2>&1; then
+        echo ">> $THIS_COMMAND: Error! Pod $POD_NAME not found. Exiting."
+        exit 1
+      elif kubectl exec --namespace=${APP_NAME} $POD_NAME --container $CONTAINER -- test -f "$FILE_PATH" 2>/dev/null; then
         echo ">> $THIS_COMMAND: Found $FILE_PATH. Exiting."
         break
       else
@@ -141,7 +142,7 @@ functions:
       fi
     done
     # Kill all background processes showing logs
-    PIDS="$(ps -A -o pid,args | grep " kubectl logs --namespace=${APP_NAME} $CONTAINER_FLAG $POD_NAME --follow$" | awk '{print $1}' | sort | uniq)"
+    PIDS="$(ps -A -o pid,args | grep " kubectl logs --namespace=${APP_NAME} --all-containers=true $POD_NAME --follow$" | awk '{print $1}' | sort | uniq)"
     echo ">> $THIS_COMMAND: Killing the log following processes"
     for PID in $PIDS; do
       echo ">> $THIS_COMMAND: Killing PID $PID"
@@ -160,7 +161,7 @@ functions:
     kubectl get --namespace=${APP_NAME} pods || echo ">> $THIS_COMMAND: Error! Failed to list pods in namespace ${APP_NAME}"
   # Print logs for a pod
   # $POD_NAME - name of the pod to print logs for
-  # $CONTAINER - Name of the container to print logs for. If "all", it will print logs for all containers.
+  # $CONTAINER - name of the container to print logs for. If "all", it will print logs for all containers.
   # $REF_COMMAND - (optional) Name of the referring command. This will be printed in the logs.
   kubectl_logs: |-
     POD_NAME="$1"

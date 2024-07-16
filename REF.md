@@ -24,7 +24,7 @@ Print the logs of a pod, until the specified file appears
 **Parameters:**
 - `$FILE_PATH` - absolute path of the file to wait for
 - `$POD_NAME` - name of the pod to print logs for
-- `$CONTAINER` - Name of the container to print logs for. If "all", it will print logs for all containers.
+- `$CONTAINER` - name of the container to print logs for
 - `$TIMEOUT` - (optional) (default: 60) timeout in seconds
 - `$REF_COMMAND` - (optional) Name of the referring command. This will be printed in the logs.
 
@@ -39,7 +39,7 @@ Print logs for a pod
 
 **Parameters:**
 - `$POD_NAME` - name of the pod to print logs for
-- `$CONTAINER` - Name of the container to print logs for. If "all", it will print logs for all containers.
+- `$CONTAINER` - name of the container to print logs for. If "all", it will print logs for all containers.
 - `$REF_COMMAND` - (optional) Name of the referring command. This will be printed in the logs.
 
 ## kubectl_describe
