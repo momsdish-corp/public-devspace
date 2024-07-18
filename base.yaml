@@ -117,7 +117,9 @@ functions:
     # Start the time
     START_TIME=$(date +%s)
     # If the pod hasn't been created, wait until it's created (otherwise logs will not be available)
-    if [[ "$(kubectl get --namespace=${APP_NAME} pod/$POD_NAME -o jsonpath='{.status.phase}')" != "Pending" ]]; then
+    POD_STATUS="$(kubectl get --namespace=${APP_NAME} pod/$POD_NAME -o jsonpath='{.status.phase}')"
+    echo ">> $THIS_COMMAND: Pod $POD_NAME is in $POD_STATUS state."
+    if [[ "$POD_STATUS" == "Pending" ]]; then
       echo ">> $THIS_COMMAND: Waiting for pod/$POD_NAME to be created."
       while true; do
         POD_STATUS="$(kubectl get --namespace=${APP_NAME} pod/$POD_NAME -o jsonpath='{.status.phase}')"
