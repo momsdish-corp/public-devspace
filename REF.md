@@ -111,3 +111,11 @@ Print pipeline flags. Used by pipelines to declare the command.
 - `$FLAG_NAMES` - Array of flag names to print. If the flag name begins with a dash, the value will be hidden.
 
 Example: `pipeline_start my-pipeline $(pipeline_print_flags non-hidden-flag -hidden-flag)`
+
+## validate_filename
+Requires the string to start end with an alphanumeric character, and contain [a-zA-Z0-9_.-], but not repeating dots.
+
+**Parameters:**
+- `$FILENAME` - Filename to validate
+
+- Example: `validate_filename "my-file-name"`

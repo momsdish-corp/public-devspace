@@ -404,7 +404,26 @@ functions:
     done
 
     echo "$FLAGS"
-
+  # Requires the string to start end with an alphanumeric character, and contain [a-zA-Z0-9_.-], but not repeating dots.
+  # $NAME - Name to validate
+  # Example: validate_filename "my-file-name"
+  validate_filename: |-
+    NAME="$1"
+    # Must only contain alphanumeric characters, hyphens, underscores or dots
+    if [[ ! "$NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]$ ]]; then
+      echo "Error! Name \"$NAME\" is invalid. It must only contain alphanumeric characters, hyphens, underscores or dots."
+      exit 1
+    fi
+    # Must start and end with an alphanumeric character
+    if [[ ! "$NAME" =~ ^[a-zA-Z0-9]*[a-zA-Z0-9]$ ]]; then
+      echo "Error! Name \"$NAME\" is invalid. It must start and end with an alphanumeric character."
+      exit 1
+    fi
+    # Must not repeat dots
+    if [[ "$NAME" =~ \.\. ]]; then
+      echo "Error! Name \"$NAME\" is invalid. It must not contain repeating dots."
+      exit 1
+    fi
 commands:
   # Keep all commands restricted to the dev environment. Production workflows must use pipelines.
   # Each command must start with
