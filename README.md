@@ -1,5 +1,5 @@
 ## Description
-This is an opinionated base devspace.yaml configuration commonly used functions.
+This is an opinionated base DevSpace file, with commonly used functions.
 
 Refer to [REF.md](REF.md) for a list of available functions.
 
@@ -10,11 +10,11 @@ Refer to [REF.md](REF.md) for a list of available functions.
 - `functions` - shared helpers for pipelines.
 - `pipelines` - where the logic happens.
 - `commands` - essentially, wrappers for pipelines, meant to be used in dev environment only.
-- The app must be ran in the same namespace, defined in `${APP_NAME}` variable. Currently defaults to the repo name.
-  Make sure to set all namespaces to `${APP_NAME}`.
+- The configuration enforces everything to run in the `${APP_NAME}` namespace. The value currently defaults to the repo 
+  name, but can be overriden. Make sure to set all namespaces in your devspace.yaml file to `${APP_NAME}`.
 
-Naming conventions:
-- Commands must be short, i.e. `<task-name>`, to make it easy to type in.
+Commands & pipelines naming conventions:
+- Commands must be short, i.e. `<task-name>`, to make it easy to type.
 - Most of the pipelines should be prefixed with "run-", i.e. `run-<task name>`.
 - For example, a command `dump-db` would run a pipeline `run-dump-db`.
 
