@@ -8,7 +8,10 @@ Refer to [REF.md](REF.md) for a list of available functions.
 
 ## devspace.yaml Structure & Logic
 - `functions` - shared helpers for pipelines.
+  - Each non-core function must define "FUNCTION_NAME", "FUNCTION_ARGS", "RESULT" and start with `function_init`.
 - `pipelines` - where the logic happens.
+  - Each non-core pipeline (i.e. dev, deploy) must define "PIPELINE_NAME" and "PIPELINE_FLAGS" and start with 
+    `pipeline_init`.
 - `commands` - essentially, wrappers for pipelines, meant to be used in dev environment only.
 - The configuration enforces everything to run in the `${APP_NAME}` namespace. The value currently defaults to the repo 
   name, but can be overriden. Make sure to set all namespaces in your devspace.yaml file to `${APP_NAME}`.

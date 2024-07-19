@@ -1,14 +1,62 @@
 # DevSpace Functions Reference
 
-## wait_for_pod_ready_or_debug
-Waits for the pod to be ready. If not ready, it will output all logs and exit with an error.
+## Core Functions
+
+### require_vars
+Require variables to be set
+
+**Parameters:**
+- `$REQUIRE_VARS` - Array of variables to check
+
+### function_init
+Must be run at the beginning of every function that doesn't return a specific value
+
+**Parameters:**
+- `$COMMAND` - Name of the function
+- `$ARGS` - (optional) All arguments passed to the function, i.e. $@)
+
+Example: `function_init my-function $@`
+
+### function_print
+Print function messages
+
+**Parameters:**
+- `$MESSAGE` - Message to log
+
+### pipeline_init
+Must be run at the beginning of every pipeline
+
+Example:
+```
+$PIPELINE_NAME=my-pipeline
+$PIPELINE_FLAGS="$(pipeline_print_flags flag1 flag2)"
+pipeline_init
+```
+
+### pipeline_print
+Log pipeline messages
+
+**Parameters:**
+- `$MESSAGE` - Message to show
+
+### pipeline_print_flags
+Print pipeline flags. Used by pipelines to declare the command.
+
+**Parameters:**
+- `$FLAG_NAMES` - Array of flag names to print. If the flag name begins with a dash, the value will be hidden.
+
+Example: `pipeline_start my-pipeline $(pipeline_print_flags non-hidden-flag -hidden-flag)`
+
+## General Functions
+
+### wait_for_pod_ready_or_debug
+Wait for the pod to be ready. If not ready, it will output all logs and exit with an error.
 
 **Parameters:**
 - `$POD_NAME` - name of the pod to wait for
 - `$TIMEOUT` - (optional) (default: 60) timeout in seconds
-- `$REF_COMMAND` - (optional) Name of the referring command. This will be printed in the logs.
 
-## wait_for_pod_exec_or_debug
+### wait_for_pod_exec_or_debug
 Wait for the pod to be ready for exec. If not ready, it will output all logs and exit with an error.
 
 **Parameters:**
@@ -16,17 +64,15 @@ Wait for the pod to be ready for exec. If not ready, it will output all logs and
 - `$CONTAINER_NAME` - name of the container to wait for
 - `$CONTAINER_TYPE` - (optional) (default: container) type of the container to wait for, i.e. initContainer, container
 - `$TIMEOUT` - (optional) (default: 60) timeout in seconds
-- `$REF_COMMAND` - (optional) Name of the referring command. This will be printed in the logs.
 
-## kubectl_follow_logs
+### kubectl_follow_logs
 Follow pod logs, until the pod finishes
 
 **Parameters:**
 - `$POD_NAME` - name of the pod to print logs for
 - `$TIMEOUT` - (optional) (default: 60) timeout in seconds
-- `$REF_COMMAND` - (optional) Name of the referring command. This will be printed in the logs.
 
-## kubectl_follow_logs_until_file_appears
+### kubectl_follow_logs_until_file_appears
 Follow pod logs, until the specified file appears. The caveat is that the logs cannot start until the specified 
 container gets created.
 
@@ -35,87 +81,53 @@ container gets created.
 - `$POD_NAME` - name of the pod to print logs for
 - `$CONTAINER` - name of the container which holds the file
 - `$TIMEOUT` - (optional) (default: 60) timeout in seconds
-- `$REF_COMMAND` - (optional) Name of the referring command. This will be printed in the logs.
 
-## kubectl_list_pods
+### kubectl_list_pods
 List all pods in the namespace
 
-**Parameters:**
-- `$REF_COMMAND` - (optional) Name of the referring command. This will be printed in the logs.
-
-## kubectl_logs
+### kubectl_logs
 Print logs for a pod
 
 **Parameters:**
 - `$POD_NAME` - name of the pod to print logs for
 - `$CONTAINER` - name of the container to print logs for. If "all", it will print logs for all containers.
-- `$REF_COMMAND` - (optional) Name of the referring command. This will be printed in the logs.
 
-## kubectl_describe
+### kubectl_describe
 Describe pod
 
 **Parameters:**
 - `$POD_NAME` - name of the pod to describe
-- `$REF_COMMAND` - (optional) Name of the referring command. This will be printed in the logs.
 
-## kubectl_status
+### kubectl_status
 Print status for a pod
 
 **Parameters:**
 - `$POD_NAME` - name of the pod to print status for
-- `$REF_COMMAND` - (optional) Name of the referring command. This will be printed in the logs.
 
-## kubectl_events
+### kubectl_events
 Print events for a pod
 
-**Parameters:**
-- `$REF_COMMAND` - (optional) Name of the referring command. This will be printed in the logs.
-
-## get_pod_by_label
+### get_pod_by_label
 Output the pod name or return error
+RETURNS: pod name
 
 **Parameters:**
 - `$LABEL_VALUE` - Name of the label, i.e app.kubernetes.io/component=wordpress
 - `$TIMEOUT` - (optional) (default: 1) timeout in seconds
 
-## require_vars
-Require variables to be set
-
-**Parameters:**
-- `$REQUIRE_VARS` - Array of variables to check
-
-## pipeline_start
-Must be run at the beginning of every pipeline
-
-**Parameters:**
-- `$COMMAND` - Name of the command
-- `$FLAGS` - (optional) Flags to pass to the command
-
-## pipeline_end
-Must be run at the end of every pipeline
-
-**Parameters:**
-- `$COMMAND` - Name of the command
-
-## pipeline_print
-Log pipeline messages
-
-**Parameters:**
-- `$COMMAND` - Name of the command
-- `$MESSAGE` - Message to log
-
-## pipeline_print_flags
-Print pipeline flags. Used by pipelines to declare the command.
-
-**Parameters:**
-- `$FLAG_NAMES` - Array of flag names to print. If the flag name begins with a dash, the value will be hidden.
-
-Example: `pipeline_start my-pipeline $(pipeline_print_flags non-hidden-flag -hidden-flag)`
-
-## validate_filename
-Requires the string to start end with an alphanumeric character, and contain [a-zA-Z0-9_.-], but not repeating dots.
+### validate_filename
+Requires the string to start end with an alphanumeric character, may contain underscores, hyphens or dots, but not 
+repeating dots.
 
 **Parameters:**
 - `$FILENAME` - Filename to validate
 
 - Example: `validate_filename "my-file-name"`
+
+### validate_namespace
+Requires the string to start end with an alphanumeric character, and may contain hyphens.
+
+**Parameters:**
+- `$STRING` - String to validate
+
+- Example: `validate_namespace "my-namespace"`
