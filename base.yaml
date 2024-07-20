@@ -543,7 +543,7 @@ functions:
     STR="$1" && require_vars STR
     
     # Validate the string
-    if [[ ! "$STR" =~ ^[a-zA-Z0-9]*[a-zA-Z0-9_.-]$ ]]; then
+    if [[ ! "$STR" =~ ^[a-zA-Z0-9_.-]*$ ]]; then
       function_print "Error! Text \"$STR\" is invalid. It must only contain alphanumeric characters, hyphens, underscores or dots."
       exit 1
     fi
