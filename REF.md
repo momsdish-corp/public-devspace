@@ -11,11 +11,11 @@ Require variables to be set
 ### function_init
 Must be run at the beginning of every function that doesn't return a specific value
 
+Example: `function_init my-function $@`
+
 **Parameters:**
 - `$COMMAND` - Name of the function
 - `$ARGS` - (optional) All arguments passed to the function, i.e. $@)
-
-Example: `function_init my-function $@`
 
 ### function_print
 Print function messages
@@ -25,10 +25,8 @@ Print function messages
 
 ### pipeline_init
 Must be run at the beginning of every pipeline
-
-Example:
-```
-$PIPELINE_NAME=my-pipeline
+```bash
+$PIPELINE_NAME my-pipeline
 $PIPELINE_FLAGS="$(pipeline_print_flags flag1 flag2)"
 pipeline_init
 ```
@@ -42,10 +40,10 @@ Log pipeline messages
 ### pipeline_print_flags
 Print pipeline flags. Used by pipelines to declare the command.
 
+Example: `pipeline_start my-pipeline $(pipeline_print_flags non-hidden-flag -hidden-flag)`
+
 **Parameters:**
 - `$FLAG_NAMES` - Array of flag names to print. If the flag name begins with a dash, the value will be hidden.
-
-Example: `pipeline_start my-pipeline $(pipeline_print_flags non-hidden-flag -hidden-flag)`
 
 ## General Functions
 
@@ -73,7 +71,7 @@ Follow pod logs, until the pod finishes
 - `$TIMEOUT` - (optional) (default: 60) timeout in seconds
 
 ### kubectl_follow_logs_until_file_appears
-Follow pod logs, until the specified file appears. The caveat is that the logs cannot start until the specified 
+Follow pod logs, until the specified file appears. The caveat is that the logs cannot start until the specified
 container gets created.
 
 **Parameters:**
@@ -116,18 +114,18 @@ RETURNS: pod name
 - `$TIMEOUT` - (optional) (default: 1) timeout in seconds
 
 ### validate_filename
-Requires the string to start end with an alphanumeric character, may contain underscores, hyphens or dots, but not 
+Requires the string to start end with an alphanumeric character, may contain underscores, hyphens or dots, but not
 repeating dots.
+
+Example: `validate_filename "my-file-name"`
 
 **Parameters:**
 - `$FILENAME` - Filename to validate
 
-- Example: `validate_filename "my-file-name"`
-
 ### validate_namespace
 Requires the string to start end with an alphanumeric character, and may contain hyphens.
 
+Example: `validate_namespace "my-namespace"`
+
 **Parameters:**
 - `$STRING` - String to validate
-
-- Example: `validate_namespace "my-namespace"`
