@@ -26,7 +26,7 @@ functions:
   #
   function_init: |-
     require_vars PIPELINE_NAME FUNCTION_NAME
-    [ $SILENT_MODE == "" ] && echo ">> $PIPELINE_NAME > ${FUNCTION_NAME}($FUNCTION_ARGS): Starting"
+    [ -z $SILENT_MODE ] && echo ">> $PIPELINE_NAME > ${FUNCTION_NAME}($FUNCTION_ARGS): Starting"
   #
   # Log function messages
   #
@@ -59,7 +59,7 @@ functions:
     echo ">> $PIPELINE_NAME $FLAGS: Starting"
     
     # Validate the app name
-    SILENT_MODE="true" && validate_namespace "${APP_NAME}" && SILENT_MODE=""
+    SILENT_MODE=true && validate_namespace "${APP_NAME}" && SILENT_MODE=""
     
     # Enforce $APP_NAME as namespace
     if [ ${APP_NAME} != ${DEVSPACE_NAMESPACE} ]; then
