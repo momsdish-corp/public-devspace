@@ -26,7 +26,7 @@ functions:
   #
   function_init: |-
     require_vars PIPELINE_NAME FUNCTION_NAME
-    echo ">> $PIPELINE_NAME > ${FUNCTION_NAME}($FUNCTION_ARGS): Starting"
+    [ $SILENT_MODE == "" ] && echo ">> $PIPELINE_NAME > ${FUNCTION_NAME}($FUNCTION_ARGS): Starting"
   #
   # Log function messages
   #
@@ -59,7 +59,7 @@ functions:
     echo ">> $PIPELINE_NAME $FLAGS: Starting"
     
     # Validate the app name
-    validate_namespace "${APP_NAME}"
+    SILENT_MODE="true" && validate_namespace "${APP_NAME}" && SILENT_MODE=""
     
     # Enforce $APP_NAME as namespace
     if [ ${APP_NAME} != ${DEVSPACE_NAMESPACE} ]; then
@@ -524,8 +524,8 @@ functions:
       fi
     done
   #
-  # Requires the string to start end with an alphanumeric character, may contain underscores, hyphens or dots, but not
-  # repeating dots.
+  # Requires the string to start and end with an alphanumeric character, may contain underscores, hyphens or dots, but
+  # not repeating dots.
   #
   # Example: validate_filename "my-file-name"
   #
