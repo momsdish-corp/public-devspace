@@ -45,6 +45,16 @@ Example: `pipeline_start my-pipeline $(pipeline_print_flags non-hidden-flag -hid
 **Parameters:**
 - `$FLAG_NAMES` - Array of flag names to print. If the flag name begins with a dash, the value will be hidden.
 
+## Core Functions
+
+### get_pod_by_label
+Output the pod name or return error
+RETURNS: pod name
+
+**Parameters:**
+- `$LABEL_VALUE` - Name of the label, i.e app.kubernetes.io/component=wordpress
+- `$TIMEOUT` - (optional) (default: 1) timeout in seconds
+
 ## General Functions
 
 ### wait_for_pod_ready_or_debug
@@ -104,14 +114,6 @@ Print status for a pod
 
 ### kubectl_events
 Print events for a pod
-
-### get_pod_by_label
-Output the pod name or return error
-RETURNS: pod name
-
-**Parameters:**
-- `$LABEL_VALUE` - Name of the label, i.e app.kubernetes.io/component=wordpress
-- `$TIMEOUT` - (optional) (default: 1) timeout in seconds
 
 ### validate_filename
 Requires the string to start end with an alphanumeric character, may contain underscores, hyphens or dots, but not

@@ -116,6 +116,50 @@ functions:
     done
 
     echo "$FLAGS"
+
+  ####################
+  # Getter Functions #
+  ####################
+
+  #
+  # Output the pod name or return error
+  #
+  # Parameters
+  # ----------
+  # $LABEL
+  #   (string) Name of the label, e.g. app.kubernetes.io/component=wordpress
+  # $TIMEOUT
+  #   (int) (Optional) Timeout in seconds
+  #   Default value: 0
+  #
+  get_pod_by_label: |-
+    FUNCTION_NAME="get_pod_by_label"
+    FUNCTION_ARGS="$@"
+    RESULT=""
+    SILENT_MODE=true && function_init && SILENT_MODE=""
+    
+    # Args
+    LABEL="$1" && require_vars LABEL
+    TIMEOUT=${2:-0}
+    
+    # Get the pod name
+    START_TIME=$(date +%s)
+    while true; do
+      # Retrieve a pod (limit 1) by name, excluding Terminating pods
+      POD_NAME=$(kubectl get pod --namespace=${APP_NAME} --selector $LABEL --no-headers 2>/dev/null | awk '$3 != "Terminating" {print $1}' | head -n 1)
+      if [ -n "$POD_NAME" ]; then
+        echo "$POD_NAME"
+        break
+      fi
+      # Take pauses until timeout
+      sleep 1
+      NOW=$(date +%s)
+      if [ $(($NOW - $START_TIME)) -gt $TIMEOUT ]; then
+        function_print "Error! No pod found with label $LABEL"
+        exit 1
+      fi
+    done
+
   #####################
   # General Functions #
   #####################
@@ -484,46 +528,6 @@ functions:
     # Print events
     function_print "Printing events"
     kubectl get --namespace=${APP_NAME} events || function_print "Error! Failed to print events"
-  #
-  # Output the pod name or return error
-  #
-  # Parameters
-  # ----------
-  # $LABEL
-  #   (string) Name of the label, e.g. app.kubernetes.io/component=wordpress
-  # $TIMEOUT
-  #   (int) (Optional) Timeout in seconds
-  #   Default value: 0
-  #
-  # Returns
-  # -------
-  # $RESULT
-  #   (string) Name of the pod
-  #
-  get_pod_by_label: |-
-    FUNCTION_NAME="get_pod_by_label"
-    FUNCTION_ARGS="$@"
-    RESULT=""
-    function_init
-    
-    # Args
-    LABEL="$1" && require_vars LABEL
-    TIMEOUT=${2:-0}
-    
-    # Get the pod name
-    START_TIME=$(date +%s)
-    while true; do
-      # Retrieve a pod (limit 1) by name, excluding Terminating pods
-      POD_NAME=$(kubectl get pod --namespace=${APP_NAME} --selector $LABEL --no-headers 2>/dev/null | awk '$3 != "Terminating" {print $1}' | head -n 1)
-      function_print "Got pod $POD_NAME"
-      [ -n "$POD_NAME" ] && RESULT="$POD_NAME" && break
-      sleep 1
-      now=$(date +%s)
-      if [ $(($now - $START_TIME)) -gt $TIMEOUT ]; then
-        function_print "Error! No pod found with label $LABEL"
-        exit 1
-      fi
-    done
   #
   # Requires the string to start and end with an alphanumeric character, may contain underscores, hyphens or dots, but
   # not repeating dots.
