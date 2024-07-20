@@ -42,7 +42,7 @@ functions:
     MESSAGE="$1" && require_vars MESSAGE
     
     # Print message
-    echo ">> $PIPELINE_NAME > ${FUNCTION_NAME}: $MESSAGE"
+    echo ">> $PIPELINE_NAME > $FUNCTION_NAME: $MESSAGE"
   #
   # Must be run at the beginning of every pipeline
   #
@@ -155,7 +155,6 @@ functions:
       sleep 1
       NOW=$(date +%s)
       if [ $(($NOW - $START_TIME)) -gt $TIMEOUT ]; then
-        function_print "Error! No pod found with label $LABEL"
         exit 1
       fi
     done
