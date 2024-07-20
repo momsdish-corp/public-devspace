@@ -548,7 +548,7 @@ functions:
       exit 1
     fi
     # Must start and end with an alphanumeric character
-    if [[ ! "$STR" =~ ^[a-zA-Z0-9]*[a-zA-Z0-9]$ ]]; then
+    if [[ ! "$STR" =~ ^[a-zA-Z0-9].*[a-zA-Z0-9]$ ]]; then
       function_print "Error! Text \"$STR\" is invalid. It must start and end with an alphanumeric character."
       exit 1
     fi
@@ -582,7 +582,7 @@ functions:
       exit 1
     fi
     # Must start and end with an alphanumeric character
-    if [[ ! "$STR" =~ ^[a-zA-Z0-9]*[a-zA-Z0-9]$ ]]; then
+    if [[ ! "$STR" =~ ^[a-zA-Z0-9].*[a-zA-Z0-9]$ ]]; then
       function_print "Error! Text \"$STR\" is invalid. It must start and end with an alphanumeric character."
       exit 1
     fi
