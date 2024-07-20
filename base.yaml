@@ -515,6 +515,7 @@ functions:
     while true; do
       # Retrieve a pod (limit 1) by name, excluding Terminating pods
       POD_NAME=$(kubectl get pod --namespace=${APP_NAME} --selector $LABEL --no-headers 2>/dev/null | awk '$3 != "Terminating" {print $1}' | head -n 1)
+      function_print "Got pod $POD_NAME"
       [ -n "$POD_NAME" ] && RESULT="$POD_NAME" && break
       sleep 1
       now=$(date +%s)
