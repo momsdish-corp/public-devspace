@@ -361,6 +361,14 @@ functions:
         function_print "Pod $POD_NAME is no longer running. Stopping logs."
         break
       fi
+      # If container is specified and it's not running, stop
+      if [[ "$CONTAINER" != 'all' ]]; then
+        CONTAINER_STATUS="$(kubectl get --namespace=${APP_NAME} pod/$POD_NAME -o jsonpath='{.status.containerStatuses[?(@.name=="'$CONTAINER'")].state.running}')"
+        if [[ -z "$CONTAINER_STATUS" ]]; then
+          function_print "Container $CONTAINER is no longer running. Stopping logs."
+          break
+        fi
+      fi
       sleep 1
       now=$(date +%s)
       if [ $(($now - $START_TIME)) -gt $TIMEOUT ]; then
