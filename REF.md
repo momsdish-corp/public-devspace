@@ -78,6 +78,7 @@ Follow pod logs, until the pod finishes
 
 **Parameters:**
 - `$POD_NAME` - name of the pod to print logs for
+- `$CONTAINER` - (optional) (default: all) name of the container to print logs for
 - `$TIMEOUT` - (optional) (default: 60) timeout in seconds
 
 ### kubectl_follow_logs_until_file_appears

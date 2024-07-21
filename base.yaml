@@ -278,7 +278,7 @@ functions:
   #   (string) Name of the pod to print logs for
   # $CONTAINER
   #   (string) (Optional) Name of the container to print logs for
-  #   Default value: all containers
+  #   Default value: all
   # $TIMEOUT
   #   (int) (Optional) Timeout in seconds
   #   Default value: 60
