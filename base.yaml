@@ -56,7 +56,7 @@ functions:
     require_vars PIPELINE_NAME APP_NAME
     
     # Print pipeline start message
-    echo ">> ${PIPELINE_NAME}${FLAGS:+ $FLAGS}"
+    echo ">> ${PIPELINE_NAME}${PIPELINE_FLAGS:+ PIPELINE_FLAGS}"
     
     # Validate the app name
     SILENT_MODE=true && validate_namespace "${APP_NAME}" && SILENT_MODE=""
