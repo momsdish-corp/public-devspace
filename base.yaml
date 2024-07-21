@@ -551,9 +551,9 @@ functions:
       function_print "Error! Text \"$STR\" is invalid. It must only contain alphanumeric characters, hyphens, underscores or dots."
       exit 1
     fi
-    # Must start and end with an alphanumeric character
-    if [[ ! "$STR" =~ ^[a-zA-Z0-9].*[a-zA-Z0-9]$ ]]; then
-      function_print "Error! Text \"$STR\" is invalid. It must start and end with an alphanumeric character."
+    # Must start with an alphanumeric character or dot, and end with an alphanumeric character
+    if [[ ! "$STR" =~ ^[a-zA-Z0-9.].*[a-zA-Z0-9]$ ]]; then
+      function_print "Error! Text \"$STR\" is invalid. It must start with an alphanumeric character or dot, and end with an alphanumeric character."
       exit 1
     fi
     # Must not repeat dots
