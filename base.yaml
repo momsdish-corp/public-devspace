@@ -276,6 +276,9 @@ functions:
   # ----------
   # $POD_NAME
   #   (string) Name of the pod to print logs for
+  # $CONTAINER
+  #   (string) (Optional) Name of the container to print logs for
+  #   Default value: all containers
   # $TIMEOUT
   #   (int) (Optional) Timeout in seconds
   #   Default value: 60
@@ -288,11 +291,12 @@ functions:
     
     # Args
     POD_NAME="$1" && require_vars POD_NAME
-    TIMEOUT=${2:-60}
+    CONTAINER="${2:-all}"
+    TIMEOUT=${3:-60}
     
-    # Follow logs in the background
     # Start the time
     START_TIME=$(date +%s)
+    
     # If the pod hasn't been created, wait until it's created (otherwise logs will not be available)
     POD_STATUS="$(kubectl get --namespace=${APP_NAME} pod/$POD_NAME -o jsonpath='{.status.phase}')"
     function_print "Pod $POD_NAME is in $POD_STATUS state."
@@ -314,10 +318,36 @@ functions:
         fi
       done
     fi
+    
+    # If a specific container is specified, wait for it to be ready
+    if [[ "$CONTAINER" != 'all' ]]; then
+      function_print "Waiting for container $CONTAINER to be ready."
+      while true; do
+        # If no longer waiting, break
+        if [[ -z "$(kubectl get --namespace=${APP_NAME} pod/$POD_NAME -o jsonpath='{.status.containerStatuses[?(@.name=="'$CONTAINER'")].state.waiting}')" ]]; then
+          function_print "Container $CONTAINER is available."
+          break
+        else
+          sleep 1
+          now=$(date +%s)
+          if [ $(($now - $START_TIME)) -gt $TIMEOUT ]; then
+            function_print "Error! Timeout waiting for container $CONTAINER to start."
+            exit 1
+          fi
+        fi
+      done
+    fi
+    
     # Follow logs
-    function_print "Following logs for pod/$POD_NAME --all-containers=true"
-    kubectl logs --namespace=${APP_NAME} --all-containers=true $POD_NAME --follow &
+    if [[ "$CONTAINER" != 'all' ]]; then
+      function_print "Following logs for pod/$POD_NAME container $CONTAINER"
+      kubectl logs --namespace=${APP_NAME} $POD_NAME -c $CONTAINER --follow &
+    else
+      function_print "Following logs for pod/$POD_NAME --all-containers=true"
+      kubectl logs --namespace=${APP_NAME} --all-containers=true $POD_NAME --follow &
+    fi
     sleep 1
+    
     # Wait until complete
     while true; do
       # If pod disappears, stop
@@ -334,12 +364,17 @@ functions:
       sleep 1
       now=$(date +%s)
       if [ $(($now - $START_TIME)) -gt $TIMEOUT ]; then
-        function_print "Error! Timeout waiting for "$FILE_PATH" to appear."
+        function_print "Error! Timeout waiting for logs to complete."
         exit 1
       fi
     done
+    
     # Kill all background processes showing logs
-    PIDS="$(ps -A -o pid,args | grep " kubectl logs --namespace=${APP_NAME} --all-containers=true $POD_NAME --follow$" | awk '{print $1}' | sort | uniq)"
+    if [[ "$CONTAINER" != 'all' ]]; then
+      PIDS="$(ps -A -o pid,args | grep " kubectl logs --namespace=${APP_NAME} $POD_NAME -c $CONTAINER --follow$" | awk '{print $1}' | sort | uniq)"
+    else
+      PIDS="$(ps -A -o pid,args | grep " kubectl logs --namespace=${APP_NAME} --all-containers=true $POD_NAME --follow$" | awk '{print $1}' | sort | uniq)"
+    fi
     function_print "Killing the log following processes"
     for PID in $PIDS; do
       function_print "Killing PID $PID" 
