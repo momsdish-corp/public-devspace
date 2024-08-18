@@ -1,5 +1,6 @@
 ## Description
-This is an opinionated base DevSpace file, with commonly used functions.
+This is an opinionated base DevSpace file, with commonly used functions. This is intended to be used as a base for
+other projects, providing the necessary helper functions.
 
 Refer to [REF.md](REF.md) for a list of available functions.
 
