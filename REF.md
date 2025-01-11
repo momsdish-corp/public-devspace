@@ -45,7 +45,7 @@ Example: `pipeline_start my-pipeline $(pipeline_print_flags non-hidden-flag -hid
 **Parameters:**
 - `$FLAG_NAMES` - Array of flag names to print. If the flag name begins with a dash, the value will be hidden.
 
-## Core Functions
+## Getter Functions
 
 ### get_pod_by_label
 Output the pod name or return error
