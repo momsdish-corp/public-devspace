@@ -4,24 +4,6 @@ name: devspace
 imports:
   - path: base.yaml
 
-functions:
-  #
-  # Require a compatible AWS CLI version to be installed
-  #
-  require_aws_cli: |-
-    # Require AWS CLI
-    if ! command -v aws >/dev/null 2>&1; then
-      echo "Error! The AWS CLI is not installed. Exiting..."
-      exit 1
-    fi
-
-    # Require AWS CLI version 2
-    AWS_CLI_MAJOR_VERSION=$(aws --version 2>&1 | awk '{print $1}' | cut -d'/' -f2 | cut -d'.' -f1)
-    if [ "$AWS_CLI_MAJOR_VERSION" != "2" ]; then
-      echo "Error! The AWS CLI version 2 is required. Exiting..."
-      exit 1
-    fi
-
 pipelines:
   #
   # Push a file or directory to an S3 bucket
@@ -64,11 +46,9 @@ pipelines:
     run: |-
 
       # Requirements
-      require_flag local-dir
-      require_flag remote-dir
-      require_flag asset
-      require_aws_cli
+      require_flags local-dir remote-dir asset
       require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_ENDPOINT_URL S3_BUCKET
+      require_cmds aws
 
       # Get flags
       LOCAL_DIR=$(get_flag local-dir)
@@ -180,10 +160,9 @@ pipelines:
         type: bool
     run: |-
       # Requirements
-      require_flag remote-dir
-      require_flag local-dir
-      require_aws_cli
+      require_flag remote-dir local-dir
       require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
+      require_cmds aws
 
       # Get flags
       REMOTE_DIR=$(get_flag remote-dir)
@@ -308,10 +287,9 @@ pipelines:
     run: |-
 
       # Requirements
-      require_flag local-dir
-      require_flag remote-dir
-      require_aws_cli
+      require_flag local-dir remote-dir
       require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
+      require_cmds aws
 
       # Get flags
       LOCAL_DIR=$(get_flag local-dir)
@@ -449,10 +427,9 @@ pipelines:
     run: |-
 
       # Requirements
-      require_flag remote-dir
-      require_flag local-dir
-      require_aws_cli
+      require_flag remote-dir local-dir
       require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
+      require_cmds aws
 
       # Get flags
       REMOTE_DIR=$(get_flag remote-dir)
