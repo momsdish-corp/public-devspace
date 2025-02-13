@@ -9,6 +9,7 @@ functions:
   # ----------
   # $REQUIRE_VARS
   #   (string) Array of variables to check
+  #
   require_vars: |-
     REQUIRE_VARS=("${@}")
     for REQUIRE_VAR in ${REQUIRE_VARS[@]}; do
@@ -25,6 +26,7 @@ functions:
   # ----------
   # $FLAG
   #   (string) Flag to check
+  #
   require_flag: |-
     FLAG_NAME="$1"
     FLAG_VALUE="$(get_flag "$FLAG_NAME")"
@@ -32,6 +34,22 @@ functions:
       echo "Error! Flag --${FLAG_NAME} is not set. Exiting..."
       exit 1
     fi
+
+  #
+  # Require commands to be installed
+  #
+  # Parameters
+  # ----------
+  # $REQUIRE_CMDS
+  #   (string) Array of commands to check
+  #
+  require_cmds: |-
+    for cmd in "$@"; do
+      if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "Error! Required command '$cmd' not found."
+        exit 1
+      fi
+    done
   #
   # Output the pod name or return error
   #
