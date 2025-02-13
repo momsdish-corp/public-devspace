@@ -13,26 +13,24 @@ functions:
     REQUIRE_VARS=("${@}")
     for REQUIRE_VAR in ${REQUIRE_VARS[@]}; do
       [[ ! "${!REQUIRE_VAR}" ]] \
-        && echo "Error! $REQUIRE_VAR is not set. Exiting..." \
+        && echo "Error! \$$REQUIRE_VAR is not set. Add it by passing '--var $REQUIRE_VAR=some-value'. Exiting..." \
         && exit 1
       required_dummy=""
     done
 
   #
-  # Get the value of a flag, or return an error if not set
+  # Require a pipeline flag to be set
   #
   # Parameters
   # ----------
   # $FLAG
-  #   (string) Name of the flag
-  get_required_flag: |-
+  #   (string) Flag to check
+  require_flag: |-
     FLAG_NAME="$1"
     FLAG_VALUE="$(get_flag "$FLAG_NAME")"
-    if [ -z "$FLAG_VALUE"]; then
-      echo "Error! Flag $FLAG_NAME is not set. Exiting..."
+    if [ -z "$FLAG_VALUE" ]; then
+      echo "Error! Flag --${FLAG_NAME} is not set. Exiting..."
       exit 1
-    else
-      echo "$FLAG_VALUE"
     fi
   #
   # Output the pod name or return error
@@ -52,7 +50,7 @@ functions:
     NAMESPACE="${1:-default}"
     LABEL="$2" && require_vars LABEL
     TIMEOUT=${3:-0}
-    
+
     # Get the pod name
     START_TIME=$(date +%s)
     while true; do
@@ -69,7 +67,7 @@ functions:
         exit 1
       fi
     done
-    
+
 vars:
   DEVSPACE_ENV_FILE: ".env"
   # Get project root directory, Windows compatible
@@ -78,10 +76,3 @@ vars:
     commands:
       - os: windows
         command: wsl --exec pwd
-  # DevSpace Settings
-  APP_NAME:
-    # Default to Repo Name
-    command: basename -s .git $(git config --get remote.origin.url)
-    commands:
-      - os: windows
-        command: wsl --exec basename -s .git $(git config --get remote.origin.url)

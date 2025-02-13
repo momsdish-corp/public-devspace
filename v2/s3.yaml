@@ -42,7 +42,7 @@ pipelines:
   # Example
   # -------
   # devspace run-pipeline s3-push --local-dir default/my-pod:/tmp/backup --remote-dir backups --asset 2025/01/backup.sql.gz
-  # 
+  #
   # This command uploads default/my-pod:/tmp/backup/2025/01/backup.sql.gz to S3://$S3_BUCKET/backups/2025/01/backup.sql.gz
   # and updates S3://$S3_BUCKET/backups/.latest to 2025/01/backup.sql.gz
   #
@@ -62,19 +62,21 @@ pipelines:
         default: true
         type: bool
     run: |-
+
+      # Requirements
+      require_flag local-dir
+      require_flag remote-dir
+      require_flag asset
+      require_aws_cli
+      require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_ENDPOINT_URL S3_BUCKET
+
       # Get flags
-      LOCAL_DIR=$(get_required_flag local-dir)
-      REMOTE_DIR=$(get_required_flag remote-dir)
-      ASSET=$(get_required_flag asset)
+      LOCAL_DIR=$(get_flag local-dir)
+      REMOTE_DIR=$(get_flag remote-dir)
+      ASSET=$(get_flag asset)
       UPDATE_MARKER=$(get_flag update-marker)
 
-      # Require AWS CLI
-      require_aws_cli
-
-      # Require variables
-      require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
-
-      # Export AWS credentials
+      # Configure AWS CLI
       export AWS_ACCESS_KEY_ID=$S3_ACCESS_KEY_ID
       export AWS_SECRET_ACCESS_KEY=$S3_SECRET_ACCESS_KEY
       export AWS_ENDPOINT_URL=$S3_ENDPOINT_URL
@@ -123,6 +125,8 @@ pipelines:
       else
         # Upload the asset to S3
         echo "Uploading $LOCAL_DIR/$ASSET to $S3_URL"
+
+        echo "aws s3 cp $DEBUG_FLAG $RECURSIVE_FLAG $LOCAL_DIR/$ASSET $S3_URL/$ASSET"
         aws s3 cp $DEBUG_FLAG $RECURSIVE_FLAG "$LOCAL_DIR/$ASSET" "$S3_URL/$ASSET"
 
         # Optionally update .latest
@@ -147,7 +151,7 @@ pipelines:
   # Parameters
   # ----------
   # --remote-dir (string) - S3 subfolder (relative path)
-  # --asset (string) - Full path to the file or folder name (if folder, must append with /), relative to --remote-dir; e.g. 2022/05/01/ or myfile.sql.gz
+  # --asset (string) - Optional. Defaults to "latest". Full path to the file or folder name (if folder, must append with /), relative to --remote-dir; e.g. 2022/05/01/ or myfile.sql.gz
   # --local-dir (string) - Relative local dir or namespace/podname:folder/on/pod
   # --update-marker (bool) - Update .latest marker on --local-dir. Default: true
   #
@@ -163,29 +167,31 @@ pipelines:
       - name: remote-dir
         description: "S3 subfolder (relative path)"
         type: string
-      - name: asset
-        description: "Full path to the file or folder name (must append /), relative to --remote-dir; e.g. 2022/05/01/ or myfile.sql.gz or latest (for the latest asset)."
-        default: "latest"
-        type: string
       - name: local-dir
         description: "Relative local dir or namespace/podname:folder/on/pod"
+        type: string
+      - name: asset
+        description: "Optional. Defaults to 'latest'. Full path to the file or folder name (must append /), relative to --remote-dir; e.g. 2022/05/01/ or myfile.sql.gz or latest (for the latest asset)."
+        default: "latest"
         type: string
       - name: update-marker
         description: "Update .latest marker on --local-dir. Default: true"
         default: true
         type: bool
     run: |-
+      # Requirements
+      require_flag remote-dir
+      require_flag local-dir
+      require_aws_cli
+      require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
+
       # Get flags
-      REMOTE_DIR=$(get_required_flag remote-dir)
+      REMOTE_DIR=$(get_flag remote-dir)
+      LOCAL_DIR=$(get_flag local-dir)
       ASSET=$(get_flag asset)
-      LOCAL_DIR=$(get_required_flag local-dir)
       UPDATE_MARKER=$(get_flag update-marker)
 
-      # Require AWS CLI
-      require_aws_cli
-
-      # Export AWS credentials
-      require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
+      # Configure AWS CLI
       export AWS_ACCESS_KEY_ID=$S3_ACCESS_KEY_ID
       export AWS_SECRET_ACCESS_KEY=$S3_SECRET_ACCESS_KEY
       export AWS_ENDPOINT_URL=$S3_ENDPOINT_URL
@@ -300,16 +306,19 @@ pipelines:
         default: false
         type: bool
     run: |-
+
+      # Requirements
+      require_flag local-dir
+      require_flag remote-dir
+      require_aws_cli
+      require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
+
       # Get flags
-      LOCAL_DIR=$(get_required_flag local-dir)
-      REMOTE_DIR=$(get_required_flag remote-dir)
+      LOCAL_DIR=$(get_flag local-dir)
+      REMOTE_DIR=$(get_flag remote-dir)
       CLEANUP=$(get_flag cleanup)
 
-      # Require AWS CLI
-      require_aws_cli
-
-      # Export AWS credentials
-      require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
+      # Configure AWS CLI
       export AWS_ACCESS_KEY_ID=$S3_ACCESS_KEY_ID
       export AWS_SECRET_ACCESS_KEY=$S3_SECRET_ACCESS_KEY
       export AWS_ENDPOINT_URL=$S3_ENDPOINT_URL
@@ -327,7 +336,7 @@ pipelines:
         POD_PATH=$(echo "$LOCAL_DIR" | cut -d':' -f2-)
         POD_NAMESPACE=$(echo "$POD_REF" | cut -d'/' -f1)
         POD_NAME=$(echo "$POD_REF" | cut -d'/' -f2)
-        
+
         # Create temporary directory for the files to upload
         TMP_DIR="/tmp/s3_backup_push_sync_$$"
         mkdir -p "$TMP_DIR"
@@ -340,7 +349,7 @@ pipelines:
         # Get complete list of files on S3
         echo && echo "Fetching a list of files on $S3_URL..."
         S3_FILES=$(aws s3 ls "$S3_URL" --recursive $DEBUG_FLAG 2>/dev/null | awk '{print $4}' | sed "s|^${REMOTE_DIR}/||")
-        [ -n "$S3_FILES" ] && echo "$S3_FILES" || echo "No files found on s3"      
+        [ -n "$S3_FILES" ] && echo "$S3_FILES" || echo "No files found on s3"
 
         # Determine new files: those present on the pod but missing on S3
         NEW_FILES=()
@@ -438,16 +447,19 @@ pipelines:
         default: false
         type: bool
     run: |-
+
+      # Requirements
+      require_flag remote-dir
+      require_flag local-dir
+      require_aws_cli
+      require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
+
       # Get flags
-      REMOTE_DIR=$(get_required_flag remote-dir)
-      LOCAL_DIR=$(get_required_flag local-dir)
+      REMOTE_DIR=$(get_flag remote-dir)
+      LOCAL_DIR=$(get_flag local-dir)
       CLEANUP=$(get_flag cleanup)
 
-      # Require AWS CLI
-      require_aws_cli
-
-      # Export AWS credentials
-      require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
+      # Configure AWS CLI
       export AWS_ACCESS_KEY_ID=$S3_ACCESS_KEY_ID
       export AWS_SECRET_ACCESS_KEY=$S3_SECRET_ACCESS_KEY
       export AWS_ENDPOINT_URL=$S3_ENDPOINT_URL
@@ -540,3 +552,13 @@ pipelines:
       fi
 
       echo && echo "s3-pull-sync completed."
+
+vars:
+  S3_ACCESS_KEY_ID:
+    source: env
+  S3_SECRET_ACCESS_KEY:
+    source: env
+  S3_ENDPOINT_URL:
+    source: env
+  S3_BUCKET:
+    source: env
