@@ -1,0 +1,70 @@
+version: v2beta1
+name: devspace
+
+functions:
+  #
+  # Require variables to be set
+  #
+  # Parameters
+  # ----------
+  # $REQUIRE_VARS
+  #   (string) Array of variables to check
+  require_vars: |-
+    REQUIRE_VARS=("${@}")
+    for REQUIRE_VAR in ${REQUIRE_VARS[@]}; do
+      [[ ! "${!REQUIRE_VAR}" ]] \
+        && echo "Error! $REQUIRE_VAR is not set. Exiting..." \
+        && exit 1
+      required_dummy=""
+    done
+  #
+  # Output the pod name or return error
+  #
+  # Parameters
+  # ----------
+  # $LABEL
+  #   (string) Name of the label, e.g. app.kubernetes.io/component=wordpress
+  # $NAMESPACE
+  #   (string) Namespace to search in
+  # $TIMEOUT
+  #   (int) (Optional) Timeout in seconds
+  #   Default value: 0
+  #
+  get_pod_by_label: |-
+    # Args
+    NAMESPACE="${1:-default}"
+    LABEL="$2" && require_vars LABEL
+    TIMEOUT=${3:-0}
+    
+    # Get the pod name
+    START_TIME=$(date +%s)
+    while true; do
+      # Retrieve a pod (limit 1) by name, excluding Terminating pods
+      POD_NAME=$(kubectl get pod --namespace=$NAMESPACE --selector $LABEL --no-headers 2>/dev/null | awk '$3 != "Terminating" {print $1}' | head -n 1)
+      if [ -n "$POD_NAME" ]; then
+        echo "$POD_NAME"
+        break
+      fi
+      # Take pauses until timeout
+      sleep 1
+      NOW=$(date +%s)
+      if [ $(($NOW - $START_TIME)) -gt $TIMEOUT ]; then
+        exit 1
+      fi
+    done
+    
+vars:
+  DEVSPACE_ENV_FILE: ".env"
+  # Get project root directory, Windows compatible
+  PROJECT_ROOT_DIR:
+    command: pwd
+    commands:
+      - os: windows
+        command: wsl --exec pwd
+  # DevSpace Settings
+  APP_NAME:
+    # Default to Repo Name
+    command: basename -s .git $(git config --get remote.origin.url)
+    commands:
+      - os: windows
+        command: wsl --exec basename -s .git $(git config --get remote.origin.url)
