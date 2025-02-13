@@ -13,10 +13,10 @@ functions:
   require_vars: |-
     REQUIRE_VARS=("${@}")
     for REQUIRE_VAR in ${REQUIRE_VARS[@]}; do
-      [[ ! "${!REQUIRE_VAR}" ]] \
-        && echo "Error! \$$REQUIRE_VAR is not set. Add it by passing '--var $REQUIRE_VAR=some-value'. Exiting..." \
-        && exit 1
-      required_dummy=""
+      if [ -z "${!REQUIRE_VAR}" ]; then
+        echo "Error! \$$REQUIRE_VAR is not set. Exiting..."
+        exit 1
+      fi
     done
 
   #
@@ -24,16 +24,17 @@ functions:
   #
   # Parameters
   # ----------
-  # $FLAG
-  #   (string) Flag to check
+  # $FLAGS
+  #   (string) Flags to check
   #
-  require_flag: |-
-    FLAG_NAME="$1"
-    FLAG_VALUE="$(get_flag "$FLAG_NAME")"
-    if [ -z "$FLAG_VALUE" ]; then
-      echo "Error! Flag --${FLAG_NAME} is not set. Exiting..."
-      exit 1
-    fi
+  require_flags: |-
+    REQUIRE_FLAGS=("${@}")
+    for REQUIRE_FLAG in ${REQUIRE_FLAGS[@]}; do
+      if [ -z "$(get_flag "$REQUIRE_FLAG")" ]; then
+        echo "Error! Flag --${REQUIRE_FLAG} is not set. Exiting..."
+        exit 1
+      fi
+    done
 
   #
   # Require commands to be installed
