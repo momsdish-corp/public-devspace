@@ -1,0 +1,542 @@
+version: v2beta1
+name: devspace
+
+imports:
+  - path: base.yaml
+
+functions:
+  #
+  # Require a compatible AWS CLI version to be installed
+  #
+  require_aws_cli: |-
+    # Require AWS CLI
+    if ! command -v aws >/dev/null 2>&1; then
+      echo "Error! The AWS CLI is not installed. Exiting..."
+      exit 1
+    fi
+
+    # Require AWS CLI version 2
+    AWS_CLI_MAJOR_VERSION=$(aws --version 2>&1 | awk '{print $1}' | cut -d'/' -f2 | cut -d'.' -f1)
+    if [ "$AWS_CLI_MAJOR_VERSION" != "2" ]; then
+      echo "Error! The AWS CLI version 2 is required. Exiting..."
+      exit 1
+    fi
+
+pipelines:
+  #
+  # Push a file or directory to an S3 bucket
+  #
+  # Requires the following environment variables:
+  # - S3_ACCESS_KEY_ID
+  # - S3_SECRET_ACCESS_KEY
+  # - S3_BUCKET
+  # - S3_ENDPOINT_URL
+  #
+  # Parameters
+  # ----------
+  # --local-dir (string) - Local directory or pod reference
+  # --remote-dir (string) - S3 subfolder
+  # --asset (string) - Full path to the file or folder name (if folder, must append with /), relative to --local-dir; e.g. 2022/05/01/ or myfile.sql.gz
+  # --update-marker (bool) - Update .latest marker on --remote-dir. Default: true
+  #
+  # Example
+  # -------
+  # devspace run-pipeline s3-push --local-dir default/my-pod:/tmp/backup --remote-dir backups --asset 2025/01/backup.sql.gz
+  # 
+  # This command uploads default/my-pod:/tmp/backup/2025/01/backup.sql.gz to S3://$S3_BUCKET/backups/2025/01/backup.sql.gz
+  # and updates S3://$S3_BUCKET/backups/.latest to 2025/01/backup.sql.gz
+  #
+  s3-push:
+    flags:
+      - name: local-dir
+        description: "local/folder or namespace/pod-name:folder/on-pod"
+        type: string
+      - name: remote-dir
+        description: "s3/folder"
+        type: string
+      - name: asset
+        description: "Full path to the file or folder name (must append /), relative to --local-dir; e.g. 2022/05/01/ or myfile.sql.gz"
+        type: string
+      - name: update-marker
+        description: "Update .latest marker on --remote-dir. Default: true"
+        default: true
+        type: bool
+    run: |-
+      # Get flags
+      LOCAL_DIR=$(get_flag local-dir) && require_vars LOCAL_DIR
+      REMOTE_DIR=$(get_flag remote-dir) && require_vars REMOTE_DIR
+      ASSET=$(get_flag asset) && require_vars ASSET
+      UPDATE_MARKER=$(get_flag update-marker)
+
+      # Require AWS CLI
+      require_aws_cli
+
+      # Require variables
+      require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
+
+      # Export AWS credentials
+      export AWS_ACCESS_KEY_ID=$S3_ACCESS_KEY_ID
+      export AWS_SECRET_ACCESS_KEY=$S3_SECRET_ACCESS_KEY
+      export AWS_ENDPOINT_URL=$S3_ENDPOINT_URL
+
+      # Strip trailing slashes
+      REMOTE_DIR=$(echo "$REMOTE_DIR" | sed 's|/$||')
+      LOCAL_DIR=$(echo "$LOCAL_DIR" | sed 's|/$||')
+
+      # Define vars
+      [ "$DEBUG" == "true" ] && DEBUG_FLAG="--debug" || DEBUG_FLAG=""
+      S3_URL="s3://${S3_BUCKET}/${REMOTE_DIR}"
+
+      # Set recursive flag if the asset is a directory
+      [[ "$ASSET" == */ ]] && RECURSIVE_FLAG="--recursive" || RECURSIVE_FLAG=""
+
+      # Determine source path
+      # If LOCAL_DIR is a pod reference (contains a colon), copy asset from pod to a temporary local dir.
+      if [[ "$LOCAL_DIR" == *":"* ]]; then
+        echo "Copying asset from $LOCAL_DIR to $S3_URL"
+
+        # Define pod values
+        POD_REF=$(echo "$LOCAL_DIR" | cut -d':' -f1)
+        POD_PATH=$(echo "$LOCAL_DIR" | cut -d':' -f2-)
+        POD_NAMESPACE=$(echo "$POD_REF" | cut -d'/' -f1)
+        POD_NAME=$(echo "$POD_REF" | cut -d'/' -f2)
+
+        # Create temporary directory for the files to upload
+        TMP_DIR="$(mktemp -d)"
+        mkdir -p "$TMP_DIR"
+
+        # Copy the asset to the pod
+        kubectl cp "$POD_REF:$POD_PATH/$ASSET" "$TMP_DIR/$ASSET"
+
+        # Upload the asset to S3
+        aws s3 cp $DEBUG_FLAG $RECURSIVE_FLAG "$TMP_DIR/$ASSET" "$S3_URL/$ASSET"
+
+        # Optionally update .latest
+        if [ "$UPDATE_MARKER" == "true" ]; then
+          echo "Setting .latest to $ASSET"
+          echo "$ASSET" > "$TMP_DIR/.latest"
+          aws s3 cp $DEBUG_FLAG "$TMP_DIR/.latest" "$S3_URL/.latest"
+        fi
+
+        # Clean up temporary directory
+        rm -rf "$TMP_DIR"
+      else
+        # Upload the asset to S3
+        echo "Uploading $LOCAL_DIR/$ASSET to $S3_URL"
+        aws s3 cp $DEBUG_FLAG $RECURSIVE_FLAG "$LOCAL_DIR/$ASSET" "$S3_URL/$ASSET"
+
+        # Optionally update .latest
+        if [ "$UPDATE_MARKER" == "true" ]; then
+          echo "Updating .latest"
+          echo "$ASSET" > "$LOCAL_DIR/.latest"
+          aws s3 cp $DEBUG_FLAG "$LOCAL_DIR/.latest" "$S3_URL/.latest"
+        fi
+      fi
+
+      echo "s3-push completed."
+
+  #
+  # Pull a file or directory from an S3 bucket
+  #
+  # Requires the following environment variables:
+  # - S3_ACCESS_KEY_ID
+  # - S3_SECRET_ACCESS_KEY
+  # - S3_BUCKET
+  # - S3_ENDPOINT_URL
+  #
+  # Parameters
+  # ----------
+  # --remote-dir (string) - S3 subfolder (relative path)
+  # --asset (string) - Full path to the file or folder name (if folder, must append with /), relative to --remote-dir; e.g. 2022/05/01/ or myfile.sql.gz
+  # --local-dir (string) - Relative local dir or namespace/podname:folder/on/pod
+  # --update-marker (bool) - Update .latest marker on --local-dir. Default: true
+  #
+  # Example
+  # -------
+  # devspace run-pipeline s3-pull --remote-dir backups --asset 2025/01/backup.sql.gz --local-dir default/my-pod:/tmp/backup
+  #
+  # This command downloads S3://$S3_BUCKET/backups/2025/01/backup.sql.gz to default/my-pod:/tmp/backup/2025/01/backup.sql.gz
+  # and updates default/my-pod:/tmp/backup/.latest to 2025/01/backup.sql.gz
+  #
+  s3-pull:
+    flags:
+      - name: remote-dir
+        description: "S3 subfolder (relative path)"
+        type: string
+      - name: asset
+        description: "Full path to the file or folder name (must append /), relative to --remote-dir; e.g. 2022/05/01/ or myfile.sql.gz or latest (for the latest asset)."
+        default: "latest"
+        type: string
+      - name: local-dir
+        description: "Relative local dir or namespace/podname:folder/on/pod"
+        type: string
+      - name: update-marker
+        description: "Update .latest marker on --local-dir. Default: true"
+        default: true
+        type: bool
+    run: |-
+      # Get flags
+      REMOTE_DIR=$(get_flag remote-dir) && require_vars REMOTE_DIR
+      ASSET=$(get_flag asset)
+      LOCAL_DIR=$(get_flag local-dir) && require_vars LOCAL_DIR
+      UPDATE_MARKER=$(get_flag update-marker)
+
+      # Require AWS CLI
+      require_aws_cli
+
+      # Export AWS credentials
+      require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
+      export AWS_ACCESS_KEY_ID=$S3_ACCESS_KEY_ID
+      export AWS_SECRET_ACCESS_KEY=$S3_SECRET_ACCESS_KEY
+      export AWS_ENDPOINT_URL=$S3_ENDPOINT_URL
+
+      # Strip trailing slashes
+      REMOTE_DIR=$(echo "$REMOTE_DIR" | sed 's|/$||')
+      LOCAL_DIR=$(echo "$LOCAL_DIR" | sed 's|/$||')
+
+      # Define vars
+      [ "$DEBUG" == "true" ] && DEBUG_FLAG="--debug" || DEBUG_FLAG=""
+      S3_URL="s3://${S3_BUCKET}/${REMOTE_DIR}"
+
+      # If latest is set, get the latest asset from S3
+      if [ "$ASSET" == "latest" ]; then
+        echo "Fetching latest asset from $S3_URL"
+        ASSET=$(aws s3 cp $DEBUG_FLAG "$S3_URL/.latest" - | tr -d '\n')
+        if [ -n "$ASSET" ]; then
+          echo "Latest asset is $ASSET"
+        else
+          echo "Unable to determine the latest asset in $S3_URL/.latest"
+          exit 1
+        fi
+      fi
+
+      # Set recursive flag if the asset is a directory
+      [[ "$ASSET" == */ ]] && RECURSIVE_FLAG="--recursive" || RECURSIVE_FLAG=""
+
+      # Determine destination path
+      # For pod references use a temporary directory before copying back.
+      if [[ "$LOCAL_DIR" == *":"* ]]; then
+        echo "Downloading $S3_URL/$ASSET to $LOCAL_DIR/$ASSET"
+
+        # Define pod values
+        POD_REF=$(echo "$LOCAL_DIR" | cut -d':' -f1)
+        POD_PATH=$(echo "$LOCAL_DIR" | cut -d':' -f2-)
+        POD_NAMESPACE=$(echo "$POD_REF" | cut -d'/' -f1)
+        POD_NAME=$(echo "$POD_REF" | cut -d'/' -f2)
+
+        # Create temporary directory for the files to upload
+        TMP_DIR="/tmp/backup_pull_$$"
+        mkdir -p "$TMP_DIR"
+
+        # Download the asset from S3
+        aws s3 cp $DEBUG_FLAG $RECURSIVE_FLAG "$S3_URL/$ASSET" "$TMP_DIR/$ASSET"
+
+        # Create the directory on the pod if it doesn't exist
+        kubectl exec -n "$POD_NAMESPACE" "$POD_NAME" -- mkdir -p "$(dirname "$POD_PATH/$ASSET")"
+
+        # Copy the asset to the pod
+        kubectl cp "$TMP_DIR/$ASSET" "$POD_REF:$POD_PATH/$ASSET"
+
+        # Optionally update .latest
+        if [ "$UPDATE_MARKER" == "true" ]; then
+          echo "Setting .latest to $ASSET"
+          echo "$ASSET" > "$TMP_DIR/.latest"
+          kubectl cp "$TMP_DIR/.latest" "$POD_REF:$POD_PATH/.latest"
+        fi
+
+        # Clean up temporary directory
+        rm -rf "$TMP_DIR"
+      else
+        # Create the local directory if it doesn't exist
+        mkdir -p "$LOCAL_DIR"
+
+        # Download the asset from S3
+        echo "Downloading $S3_URL/$ASSET to $LOCAL_DIR/$ASSET"
+        aws s3 cp $DEBUG_FLAG $RECURSIVE_FLAG "$S3_URL/$ASSET" "$LOCAL_DIR/$ASSET"
+
+        # Optionally update .latest
+        if [ "$UPDATE_MARKER" == "true" ]; then
+          echo "Updating .latest"
+          echo "$ASSET" > "$LOCAL_DIR/.latest"
+        fi
+      fi
+
+      echo "s3-pull completed."
+
+  #
+  # Syncs a local directory to an S3 bucket
+  # Note: This command is incremental, only the missing files are copied from the local directory to S3
+  # TODO - compare files by size and timestamp
+  #
+  # Requires the following environment variables:
+  # - S3_ACCESS_KEY_ID
+  # - S3_SECRET_ACCESS_KEY
+  # - S3_BUCKET
+  # - S3_ENDPOINT_URL
+  #
+  # Parameters
+  # ----------
+  # --local-dir (string) - Local directory or pod reference
+  # --remote-dir (string) - S3 subfolder
+  # --cleanup (bool) - Delete orphaned files on S3. Default: false
+  #
+  # Example
+  # -------
+  # devspace run-pipeline s3-push-sync --local-dir default/my-pod:/tmp/backup --remote-dir backups --cleanup
+  #
+  # This command syncs default/my-pod:/tmp/backup to S3://$S3_BUCKET/backups
+  # and deletes orphaned files on S3://$S3_BUCKET/backups
+  #
+  s3-push-sync:
+    flags:
+      - name: local-dir
+        description: "local/folder or namespace/pod-name:folder/on/pod"
+        type: string
+      - name: remote-dir
+        description: "s3/folder"
+        type: string
+      - name: cleanup
+        description: "Delete orphaned files on S3. Default: false"
+        default: false
+        type: bool
+    run: |-
+      # Get flags
+      LOCAL_DIR=$(get_flag local-dir) && require_vars LOCAL_DIR
+      REMOTE_DIR=$(get_flag remote-dir) && require_vars REMOTE_DIR
+      CLEANUP=$(get_flag cleanup)
+
+      # Require AWS CLI
+      require_aws_cli
+
+      # Export AWS credentials
+      require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
+      export AWS_ACCESS_KEY_ID=$S3_ACCESS_KEY_ID
+      export AWS_SECRET_ACCESS_KEY=$S3_SECRET_ACCESS_KEY
+      export AWS_ENDPOINT_URL=$S3_ENDPOINT_URL
+
+      # Define vars
+      [ "$DEBUG" == "true" ] && DEBUG_FLAG="--debug" || DEBUG_FLAG=""
+      S3_URL="s3://${S3_BUCKET}/${REMOTE_DIR}"
+
+      # If LOCAL_DIR indicates a pod, perform incremental sync. Otherwise, use native aws s3 sync.
+      if [[ "$LOCAL_DIR" == *":"* ]]; then
+        echo && echo "Performing incremental sync from pod $LOCAL_DIR to $S3_URL"
+
+        # Define pod values
+        POD_REF=$(echo "$LOCAL_DIR" | cut -d':' -f1)
+        POD_PATH=$(echo "$LOCAL_DIR" | cut -d':' -f2-)
+        POD_NAMESPACE=$(echo "$POD_REF" | cut -d'/' -f1)
+        POD_NAME=$(echo "$POD_REF" | cut -d'/' -f2)
+        
+        # Create temporary directory for the files to upload
+        TMP_DIR="/tmp/s3_backup_push_sync_$$"
+        mkdir -p "$TMP_DIR"
+
+        # Get list of all files on the pod
+        echo && echo "Fetching a list of files on $LOCAL_DIR..."
+        POD_FILES=$(kubectl exec -n "$POD_NAMESPACE" "$POD_NAME" -- find "$POD_PATH" -type f 2>/dev/null | sed "s|^${POD_PATH}/||")
+        [ -n "$POD_FILES" ] && echo "$POD_FILES" || echo "No files found on the pod"
+
+        # Get complete list of files on S3
+        echo && echo "Fetching a list of files on $S3_URL..."
+        S3_FILES=$(aws s3 ls "$S3_URL" --recursive $DEBUG_FLAG 2>/dev/null | awk '{print $4}' | sed "s|^${REMOTE_DIR}/||")
+        [ -n "$S3_FILES" ] && echo "$S3_FILES" || echo "No files found on s3"      
+
+        # Determine new files: those present on the pod but missing on S3
+        NEW_FILES=()
+        for POD_FILE in $POD_FILES; do
+          if ! echo "$S3_FILES" | grep -qx "$POD_FILE"; then
+            NEW_FILES+=("$POD_FILE")
+          elif [ "$POD_FILE" == ".latest" ]; then
+            # Make sure the .latest file is always synced
+            NEW_FILES+=("$POD_FILE")
+          fi
+        done
+
+        # Upload the new files to S3
+        if [ ${#NEW_FILES[@]} -gt 0 ]; then
+          echo && echo "Uploading ${#NEW_FILES[@]} new file(s) to S3..."
+          for NEW_FILE in "${NEW_FILES[@]}"; do
+            mkdir -p "$(dirname "$TMP_DIR/$NEW_FILE")"
+            kubectl cp "$POD_NAMESPACE/$POD_NAME:$POD_PATH/$NEW_FILE" "$TMP_DIR/$NEW_FILE"
+            aws s3 cp $DEBUG_FLAG "$TMP_DIR/$NEW_FILE" "$S3_URL/$NEW_FILE"
+          done
+        else
+          echo && echo "No new files to upload to S3."
+        fi
+
+        # Cleanup: Remove orphaned files from S3
+        if [ "$CLEANUP" == "true" ]; then
+          echo && echo "Running cleanup..."
+          # Find orphaned files on S3
+          ORPHANED_FILES=()
+          for S3_FILE in $S3_FILES; do
+            if ! echo "$POD_FILES" | grep -qx "$S3_FILE"; then
+              ORPHANED_FILES+=("$S3_FILE")
+            fi
+          done
+          # Delete orphaned files from S3
+          if [ ${#ORPHANED_FILES[@]} -gt 0 ]; then
+            echo "Deleting ${#ORPHANED_FILES[@]} orphaned file(s) from S3..."
+            for ORPHANED_FILE in "${ORPHANED_FILES[@]}"; do
+              echo "Deleting $ORPHANED_FILE from S3"
+              aws s3 rm $DEBUG_FLAG "$S3_URL/$ORPHANED_FILE"
+            done
+          else
+            echo "No orphaned files to delete on S3."
+          fi
+        fi
+
+        # Cleanup: Remove temporary directory
+        rm -rf "$TMP_DIR"
+      else
+        # Local directory mode: Use native aws s3 sync
+        echo "Local directory detected. Running aws s3 sync..."
+        if [ "$CLEANUP" == "true" ]; then
+          aws s3 sync $DEBUG_FLAG --delete "$LOCAL_DIR" "$S3_URL"
+        else
+          aws s3 sync $DEBUG_FLAG "$LOCAL_DIR" "$S3_URL"
+        fi
+      fi
+
+      echo && echo "s3-push-sync completed."
+
+  #
+  # Syncs a S3 bucket to a local directory or pod
+  # Note: The pod sync is incremental, (with the exception of .latest file) only the missing files are copied from S3 to the pod
+  # TODO - compare files by size and timestamp
+  #
+  # Requires the following environment variables:
+  # - S3_ACCESS_KEY_ID
+  # - S3_SECRET_ACCESS_KEY
+  # - S3_BUCKET
+  # - S3_ENDPOINT_URL
+  #
+  # Parameters
+  # ----------
+  # --remote-dir (string) - S3 subfolder (relative path)
+  # --local-dir (string) - Local directory or pod reference
+  # --cleanup (bool) - Delete orphaned files locally. Default: false
+  #
+  # Example
+  # -------
+  # devspace run-pipeline s3-pull-sync --remote-dir backups --local-dir default/my-pod:/tmp/backup --cleanup
+  #
+  # This command syncs S3://$S3_BUCKET/backups to default/my-pod:/tmp/backup
+  # and deletes orphaned files from default/my-pod:/tmp/backup
+  #
+  s3-pull-sync:
+    flags:
+      - name: remote-dir
+        description: "s3/folder"
+        type: string
+      - name: local-dir
+        description: "local/folder or namespace/pod-name:folder/on/pod"
+        type: string
+      - name: cleanup
+        description: "Delete orphaned files locally. Default: false"
+        default: false
+        type: bool
+    run: |-
+      # Get flags
+      REMOTE_DIR=$(get_flag remote-dir) && require_vars REMOTE_DIR
+      LOCAL_DIR=$(get_flag local-dir) && require_vars LOCAL_DIR
+      CLEANUP=$(get_flag cleanup)
+
+      # Require AWS CLI
+      require_aws_cli
+
+      # Export AWS credentials
+      require_vars S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_ENDPOINT_URL
+      export AWS_ACCESS_KEY_ID=$S3_ACCESS_KEY_ID
+      export AWS_SECRET_ACCESS_KEY=$S3_SECRET_ACCESS_KEY
+      export AWS_ENDPOINT_URL=$S3_ENDPOINT_URL
+
+      # Define vars
+      [ "$DEBUG" == "true" ] && DEBUG_FLAG="--debug" || DEBUG_FLAG=""
+      S3_URL="s3://${S3_BUCKET}/${REMOTE_DIR}"
+
+      # If LOCAL_DIR indicates a pod, perform incremental sync. Otherwise, use native aws s3 sync.
+      if [[ "$LOCAL_DIR" == *":"* ]]; then
+        echo && echo "Performing incremental sync from $S3_URL to pod $LOCAL_DIR"
+
+        # Define pod values
+        POD_REF=$(echo "$LOCAL_DIR" | cut -d':' -f1)
+        POD_PATH=$(echo "$LOCAL_DIR" | cut -d':' -f2-)
+        POD_NAMESPACE=$(echo "$POD_REF" | cut -d'/' -f1)
+        POD_NAME=$(echo "$POD_REF" | cut -d'/' -f2)
+
+        # Create temporary directory for the files to upload
+        TMP_DIR="$(mktemp -d)"
+        mkdir -p "$TMP_DIR"
+
+        # Get complete list of files on S3
+        echo && echo "Fetching a list of files on $S3_URL..."
+        S3_FILES=$(aws s3 ls "$S3_URL" --recursive $DEBUG_FLAG 2>/dev/null | awk '{print $4}' | sed "s|^${REMOTE_DIR}/||")
+        [ -n "$S3_FILES" ] && echo "$S3_FILES" || echo "No files found on s3"
+
+        # Get list of all files on the pod
+        echo && echo "Fetching a list of files on $LOCAL_DIR..."
+        POD_FILES=$(kubectl exec -n "$POD_NAMESPACE" "$POD_NAME" -- find "$POD_PATH" -type f 2>/dev/null | sed "s|^${POD_PATH}/||")
+        [ -n "$POD_FILES" ] && echo "$POD_FILES" || echo "No files found on the pod"
+
+        # Determine new files: those present on S3 but missing on the pod
+        NEW_FILES=()
+        for S3_FILE in $S3_FILES; do
+          if ! echo "$POD_FILES" | grep -qx "$S3_FILE"; then
+            NEW_FILES+=("$S3_FILE")
+          elif [ "$S3_FILE" == ".latest" ]; then
+            # Make sure the .latest file is always synced
+            NEW_FILES+=("$S3_FILE")
+          fi
+        done
+
+        # Download the new files to the pod
+        if [ ${#NEW_FILES[@]} -gt 0 ]; then
+          echo && echo "Downloading ${#NEW_FILES[@]} new file(s) to pod..."
+          for NEW_FILE in "${NEW_FILES[@]}"; do
+            mkdir -p "$(dirname "$TMP_DIR/$NEW_FILE")"
+            aws s3 cp $DEBUG_FLAG "$S3_URL/$NEW_FILE" "$TMP_DIR/$NEW_FILE"
+            kubectl exec -n "$POD_NAMESPACE" "$POD_NAME" -- mkdir -p "$(dirname "$POD_PATH/$NEW_FILE")"
+            kubectl cp "$TMP_DIR/$NEW_FILE" "$POD_NAMESPACE/$POD_NAME:$POD_PATH/$NEW_FILE"
+          done
+        else
+          echo && echo "No new files to download to pod."
+        fi
+
+        # Cleanup: Remove orphaned files from the pod
+        if [ "$CLEANUP" == "true" ]; then
+          echo && echo "Running cleanup on pod..."
+          # Find orphaned files on the pod
+          ORPHANED_FILES=()
+          for POD_FILE in $POD_FILES; do
+            if ! echo "$S3_FILES" | grep -qx "$POD_FILE"; then
+              ORPHANED_FILES+=("$POD_FILE")
+            fi
+          done
+          # Delete orphaned files from pod
+          if [ ${#ORPHANED_FILES[@]} -gt 0 ]; then
+            echo "Deleting ${#ORPHANED_FILES[@]} orphaned file(s) from pod..."
+            for ORPHANED_FILE in "${ORPHANED_FILES[@]}"; do
+              echo "Deleting $POD_PATH/$ORPHANED_FILE from pod"
+              kubectl exec -n "$POD_NAMESPACE" "$POD_NAME" -- rm -f "$POD_PATH/$ORPHANED_FILE"
+            done
+          else
+            echo "No orphaned files to delete on pod."
+          fi
+        fi
+
+        # Cleanup: Remove temporary directory
+        rm -rf "$TMP_DIR"
+
+      else
+        # Local directory mode: Use native aws s3 sync
+        echo && echo "Syncing S3 to local directory $LOCAL_DIR..."
+        if [ "$CLEANUP" == "true" ]; then
+          aws s3 sync $DEBUG_FLAG --delete "$S3_URL" "$LOCAL_DIR"
+        else
+          aws s3 sync $DEBUG_FLAG "$S3_URL" "$LOCAL_DIR"
+        fi
+      fi
+
+      echo && echo "s3-pull-sync completed."
