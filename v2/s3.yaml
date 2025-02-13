@@ -63,9 +63,9 @@ pipelines:
         type: bool
     run: |-
       # Get flags
-      LOCAL_DIR=$(get_flag local-dir) && require_vars LOCAL_DIR
-      REMOTE_DIR=$(get_flag remote-dir) && require_vars REMOTE_DIR
-      ASSET=$(get_flag asset) && require_vars ASSET
+      LOCAL_DIR=$(get_required_flag local-dir)
+      REMOTE_DIR=$(get_required_flag remote-dir)
+      ASSET=$(get_required_flag asset)
       UPDATE_MARKER=$(get_flag update-marker)
 
       # Require AWS CLI
@@ -176,9 +176,9 @@ pipelines:
         type: bool
     run: |-
       # Get flags
-      REMOTE_DIR=$(get_flag remote-dir) && require_vars REMOTE_DIR
+      REMOTE_DIR=$(get_required_flag remote-dir)
       ASSET=$(get_flag asset)
-      LOCAL_DIR=$(get_flag local-dir) && require_vars LOCAL_DIR
+      LOCAL_DIR=$(get_required_flag local-dir)
       UPDATE_MARKER=$(get_flag update-marker)
 
       # Require AWS CLI
@@ -301,8 +301,8 @@ pipelines:
         type: bool
     run: |-
       # Get flags
-      LOCAL_DIR=$(get_flag local-dir) && require_vars LOCAL_DIR
-      REMOTE_DIR=$(get_flag remote-dir) && require_vars REMOTE_DIR
+      LOCAL_DIR=$(get_required_flag local-dir)
+      REMOTE_DIR=$(get_required_flag remote-dir)
       CLEANUP=$(get_flag cleanup)
 
       # Require AWS CLI
@@ -439,8 +439,8 @@ pipelines:
         type: bool
     run: |-
       # Get flags
-      REMOTE_DIR=$(get_flag remote-dir) && require_vars REMOTE_DIR
-      LOCAL_DIR=$(get_flag local-dir) && require_vars LOCAL_DIR
+      REMOTE_DIR=$(get_required_flag remote-dir)
+      LOCAL_DIR=$(get_required_flag local-dir)
       CLEANUP=$(get_flag cleanup)
 
       # Require AWS CLI

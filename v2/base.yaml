@@ -17,6 +17,23 @@ functions:
         && exit 1
       required_dummy=""
     done
+
+  #
+  # Get the value of a flag, or return an error if not set
+  #
+  # Parameters
+  # ----------
+  # $FLAG
+  #   (string) Name of the flag
+  get_required_flag: |-
+    FLAG_NAME="$1"
+    FLAG_VALUE="$(get_flag "$FLAG_NAME")"
+    if [ -z "$FLAG_VALUE"]; then
+      echo "Error! Flag $FLAG_NAME is not set. Exiting..."
+      exit 1
+    else
+      echo "$FLAG_VALUE"
+    fi
   #
   # Output the pod name or return error
   #
