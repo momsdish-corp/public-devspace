@@ -1,0 +1,593 @@
+version: v2beta1
+name: devspace
+
+imports:
+  - git: https://github.com/momsdish-corp/public-devspace.git
+    branch: main
+    subPath: v2/base.yaml
+
+functions:
+  # Usage: decodedVal="$(url_decode "$encodedVal")"
+  url_decode: |-
+    input="${1:-}"
+    decoded="${input//%/\\x}"
+    echo -e $(echo -e "$decoded")
+
+  # Usage: encodedVal="$(url_encode "some string")"
+  url_encode: |-
+    string="${1:-}"
+    strlen=${#string}
+    encoded=""
+    for (( pos=0; pos<strlen; pos++ )); do
+      c="${string:$pos:1}"
+      case "$c" in
+        [-_.~a-zA-Z0-9]) o="$c" ;;
+        *) ascii=$(echo -n "$c" | od -An -t uC | tr -d ' '); o=$(printf '%%%02x' "$ascii") ;;
+      esac
+      encoded+="$o"
+    done
+    echo "$encoded"
+
+pipelines:
+  test:
+    flags:
+      - name: file
+        description: "(required) Path to test YAML, i.e. /tmp/test.yaml"
+        type: string
+        default: "/workspace/test.yaml"
+    run: |-
+      # Requirements
+      require_flags baseURL
+      require_cmds curl htmlq
+
+      # Get flags
+      ENCODED_REQUESTED_BASE_URL="$(get_flag baseURL)"
+      ENCODED_REQUESTED_PATH="$(get_flag path)"
+      ENCODED_REQUESTED_TIMEOUT="$(get_flag timeout)"
+      ENCODED_REQUESTED_STATUS_CODE="$(get_flag statusCode)"
+      ENCODED_REQUESTED_REDIRECTS_TO="$(get_flag redirectsTo)"
+      ENCODED_REQUESTED_CSS_SELECTOR_CONCAT="$(get_flag cssSelector)"
+      ENCODED_REQUESTED_ANTI_CSS_SELECTOR_CONCAT="$(get_flag antiCssSelector)"
+      DEBUG="$(get_flag debug)"
+
+      # Decode flags
+      REQUESTED_BASE_URL="$(url_decode "$ENCODED_REQUESTED_BASE_URL")"
+      REQUESTED_PATH="$(url_decode "$ENCODED_REQUESTED_PATH")"
+      REQUESTED_TIMEOUT="$(url_decode "$ENCODED_REQUESTED_TIMEOUT")"
+      REQUESTED_STATUS_CODE="$(url_decode "$ENCODED_REQUESTED_STATUS_CODE")"
+      REQUESTED_REDIRECTS_TO="$(url_decode "$ENCODED_REQUESTED_REDIRECTS_TO")"
+
+      # Parse concatenated flags
+      ENCODED_REQUESTED_CSS_SELECTOR_ARRAY=()
+      for selector in ${ENCODED_REQUESTED_CSS_SELECTOR_CONCAT//,/ }; do
+        ENCODED_REQUESTED_CSS_SELECTOR_ARRAY+=("$selector")
+      done
+      ENCODED_REQUESTED_ANTI_CSS_SELECTOR_ARRAY=()
+      for selector in ${ENCODED_REQUESTED_ANTI_CSS_SELECTOR_CONCAT//,/ }; do
+        ENCODED_REQUESTED_ANTI_CSS_SELECTOR_ARRAY+=("$selector")
+      done
+
+      # Validate base URL
+      if [[ ! "$REQUESTED_BASE_URL" =~ ^https?:// ]]; then
+        echo "Error: The baseURL ($REQUESTED_BASE_URL) must start with http:// or https://"
+        exit 1
+      fi
+
+      # Print fetch
+      echo
+      echo "### Fetching ${REQUESTED_BASE_URL}${REQUESTED_PATH} (timeout ${REQUESTED_TIMEOUT}s) ###"
+
+      ####################
+      ### CHECK HEADER ###
+      ####################
+      FAIL_TEST="false"
+      CURL_ERROR=0
+
+      # Do not exist if the curl timesouts or fails, to collect the info. On failure, RETURNED_STATUS_CODE will be 000.
+      CURL_OUT="$(curl --connect-timeout $REQUESTED_TIMEOUT --max-time $REQUESTED_TIMEOUT --insecure --silent \
+        --write-out "\n---BEGIN WRITE-OUT---\nRETURNED_STATUS_CODE: %{response_code}\nRETURNED_REDIRECT_URL: %{redirect_url}\nRETURNED_SIZE: %{size_download}\nRETURNED_LOAD_TIME: %{time_total}\n" \
+        "${REQUESTED_BASE_URL}${REQUESTED_PATH}" 2>/dev/null || true)"
+
+      # Log error
+      if [ $? -ne 0 ]; then
+        FAIL_TEST="true"
+        CURL_ERROR="$?"
+        # Debug info
+        if [ "$DEBUG" == "true" ]; then
+          echo
+          echo "(debug) Curl returned \"error $?\". It could either be because of the timeout reached or other reasons. Here is the returned output:"
+          echo "$CURL_OUT"
+          echo
+        fi
+      fi
+      # Define variables
+
+      RETURNED_HTML="$(echo "$CURL_OUT" | perl -pe 'last if /---BEGIN WRITE-OUT---/')"
+      RETURNED_WRITE_OUT="$(echo "$CURL_OUT" | perl -0777 -pe 's/.*?---BEGIN WRITE-OUT---\n//s')"
+
+      RETURNED_STATUS_CODE="$(echo "$RETURNED_WRITE_OUT"  | grep "RETURNED_STATUS_CODE"   | awk '{print $2}')"
+      RETURNED_REDIRECT_URL="$(echo "$RETURNED_WRITE_OUT" | grep "RETURNED_REDIRECT_URL"  | awk '{print $2}')"
+      RETURNED_SIZE="$(echo "$RETURNED_WRITE_OUT"         | grep "RETURNED_SIZE"          | awk '{print $2}')"
+      RETURNED_LOAD_TIME="$(echo "$RETURNED_WRITE_OUT"    | grep "RETURNED_LOAD_TIME"     | awk '{print $2}')"
+      RETURNED_PAGE_TITLE="$(echo "$RETURNED_HTML"        | htmlq --text "title" 2>/dev/null || true)"
+
+      # Status code
+      if [[ -n "$REQUESTED_STATUS_CODE" ]] && [[ "$REQUESTED_STATUS_CODE" != "$RETURNED_STATUS_CODE" ]]; then
+        FAIL_TEST="true"
+        echo "> Status code: $RETURNED_STATUS_CODE (Fail! Expected: $REQUESTED_STATUS_CODE)"
+      else
+        echo "> Status code: $RETURNED_STATUS_CODE"
+      fi
+
+      # Redirects to
+      if [[ -n "$REQUESTED_REDIRECTS_TO" ]] && [[ "${RETURNED_REDIRECT_URL}" != "${REQUESTED_BASE_URL}${REQUESTED_REDIRECTS_TO}" ]]; then
+        FAIL_TEST="true"
+        echo "> Redirects to: $RETURNED_REDIRECT_URL (Fail! Expected: ${REQUESTED_BASE_URL}${REQUESTED_REDIRECTS_TO})"
+      else
+        echo "> Redirects to: $RETURNED_REDIRECT_URL"
+      fi
+
+      # Size
+      echo "> Size: $RETURNED_SIZE"
+
+      # Load time
+      echo "> Load time: $RETURNED_LOAD_TIME"
+
+      # If error, exit, as we don't have the HTML to check
+      if [ "$FAIL_TEST" == "true" ]; then
+        echo "Test failed."
+        if [ "$CURL_ERROR" -ne 0 ]; then
+          echo "Additionally, curl returned error $CURL_ERROR."
+        fi
+        exit 1
+      fi
+
+      ##################
+      ### CHECK HTML ###
+      ##################
+
+      # CSS selectors
+      echo "> Page title: $RETURNED_PAGE_TITLE"
+
+      # Check CSS selectors
+      if [[ "${#ENCODED_REQUESTED_CSS_SELECTOR_ARRAY[@]}" -gt 0 ]]; then
+        for ENCODED_REQUESTED_CSS_SELECTOR in "${ENCODED_REQUESTED_CSS_SELECTOR_ARRAY[@]}"; do
+          # Decode
+          REQUESTED_CSS_SELECTOR_AND_TEXT="$(url_decode "$ENCODED_REQUESTED_CSS_SELECTOR")"
+
+          # Extract the actual selector - removing the :text() part
+          REQUESTED_CSS_SELECTOR="$(echo "$REQUESTED_CSS_SELECTOR_AND_TEXT" | perl -n -e "/(.*?)(?=:text|$)/ && print \$1")"
+
+          # Get the value of the text() part
+          REQUESTED_TEXT="$(echo "$REQUESTED_CSS_SELECTOR_AND_TEXT" | perl -n -e "/(?<=:text\\()[\"']?([^\"']*)[\"']?(?=\\))/ && print \$1")"
+
+          # echo " Find CSS selector: $selector"
+
+          if [[ -n "$REQUESTED_TEXT" ]]; then
+            CSS_SELECTOR_STRING="> Requiring text \"$REQUESTED_TEXT\" in CSS Selector ($REQUESTED_CSS_SELECTOR)"
+          else
+            CSS_SELECTOR_STRING="> Requiring existance of CSS Selector ($REQUESTED_CSS_SELECTOR)"
+          fi
+
+          if [[ -n "$REQUESTED_TEXT" ]]; then
+            RETURNED_TEXT="$(echo "$RETURNED_HTML" | htmlq --text "$REQUESTED_CSS_SELECTOR")"
+            if [[ "$REQUESTED_TEXT" != "$RETURNED_TEXT" ]]; then
+              FAIL_TEST="true"
+              CSS_SELECTOR_STRING="$CSS_SELECTOR_STRING (Fail! Returned: $RETURNED_TEXT)"
+            fi
+          else
+            RETURNED_ELEMENT="$(echo "$RETURNED_HTML" | htmlq "$REQUESTED_CSS_SELECTOR")"
+            if [[ -z "$RETURNED_ELEMENT" ]]; then
+              FAIL_TEST="true"
+              CSS_SELECTOR_STRING="$CSS_SELECTOR_STRING (Fail! Not found)"
+            fi
+          fi
+
+          echo "$CSS_SELECTOR_STRING"
+        done
+      fi
+
+      # Check anti CSS selectors
+      if [[ "${#ENCODED_REQUESTED_ANTI_CSS_SELECTOR_ARRAY[@]}" -gt 0 ]]; then
+        for ENCODED_REQUESTED_ANTI_CSS_SELECTOR in "${ENCODED_REQUESTED_ANTI_CSS_SELECTOR_ARRAY[@]}"; do
+          # Decode
+          REQUESTED_ANTI_CSS_SELECTOR_AND_TEXT="$(url_decode "$ENCODED_REQUESTED_ANTI_CSS_SELECTOR")"
+
+          # Extract the actual selector - removing the :text() part
+          REQUESTED_ANTI_CSS_SELECTOR="$(echo "$REQUESTED_ANTI_CSS_SELECTOR_AND_TEXT" | perl -n -e "/(.*?)(?=:text|$)/ && print \$1")"
+
+          # Get the value of the text() part
+          REQUESTED_ANTI_TEXT="$(echo "$REQUESTED_ANTI_CSS_SELECTOR_AND_TEXT" | perl -n -e "/(?<=:text\\()[\"']?([^\"']*)[\"']?(?=\\))/ && print \$1")"
+
+          if [[ -n "$REQUESTED_ANTI_TEXT" ]]; then
+            ANTI_CSS_SELECTOR_STRING="> Requiring absense of text \"$REQUESTED_ANTI_TEXT\" in CSS Selector ($REQUESTED_ANTI_CSS_SELECTOR)"
+          else
+            ANTI_CSS_SELECTOR_STRING="> Requiring absense of CSS Selector ($REQUESTED_ANTI_CSS_SELECTOR)"
+          fi
+
+          if [[ -n "$REQUESTED_ANTI_TEXT" ]]; then
+            RETURNED_ANTI_TEXT="$(echo "$RETURNED_HTML" | htmlq --text "$REQUESTED_ANTI_CSS_SELECTOR")"
+            if [[ "$REQUESTED_ANTI_TEXT" == "$RETURNED_ANTI_TEXT" ]]; then
+              FAIL_TEST="true"
+              ANTI_CSS_SELECTOR_STRING="$ANTI_CSS_SELECTOR_STRING (Fail! Found: $RETURNED_ANTI_TEXT)"
+            fi
+          else
+            RETURNED_ANTI_ELEMENT="$(echo "$RETURNED_HTML" | htmlq "$REQUESTED_ANTI_CSS_SELECTOR")"
+            if [[ -n "$RETURNED_ANTI_ELEMENT" ]]; then
+              FAIL_TEST="true"
+              ANTI_CSS_SELECTOR_STRING="$ANTI_CSS_SELECTOR_STRING (Fail! Found)"
+            fi
+          fi
+
+          echo "$ANTI_CSS_SELECTOR_STRING"
+        done
+      fi
+
+      # If error, exit
+      if [ "$FAIL_TEST" == "true" ]; then
+        echo "Test failed."
+        exit 1
+      fi
+
+      echo "Test passed."
+
+  # TODO - not completed
+  # Measure the performance of a website
+  performance:
+    flags:
+      - name: baseURL
+        description: "(required) Base URL of the website to test, i.e. https://example.com"
+        type: string
+      - name: path
+        description: "(optional) Path to fetch, i.e. /about"
+        type: string
+        default: "/"
+      - name: timeout
+        description: "(optional) Maximum time to wait for a response in seconds. Decimals are allowed."
+        type: string
+        default: "5"
+      - name: count
+        description: "(optional) Number of times to run the test."
+        type: string
+        default: "1"
+      - name: requiredMean
+        description: "(optional) Require the mean average load time to be less than this value. 0 to disable."
+        type: string
+        default: "0"
+      - name: requireTrimmedMean
+        description: "(optional) Require the trimmed mean average load time to be less than this value. 0 to disable."
+        type: string
+        default: "0"
+      - name: debug
+        description: "(optional) Enable debug mode."
+        type: bool
+        default: false
+    run: |-
+      # Requirements
+      require_flags baseURL
+      require_cmds curl
+
+      # Get flags
+      BASE_URL="$(get_flag baseURL)"
+      URL_PATH="$(get_flag path)"
+      TIMEOUT="$(get_flag timeout)"
+      COUNT="$(get_flag count)"
+      REQUIRE_MEAN="$(get_flag requireMean)"
+      REQUIRE_TRIMMED_MEAN="$(get_flag requireTrimmedMean)"
+      DEBUG="$(get_flag debug)"
+
+
+  reload:
+    flags:
+      - name: baseURL
+        description: "(required) Base URL of the website to reload, i.e. https://example.com"
+        type: string
+      - name: path
+        description: "(required) Path to reload, i.e. /about"
+        type: string
+        default: "/"
+      - name: count
+        description: "(optional) Number of times to reload the page."
+        type: string
+        default: "1"
+      - name: timeout
+        description: "(optional) Maximum time to wait for a response in seconds. Decimals are allowed."
+        type: string
+        default: "5"
+      - name: interval
+        description: "(optional) Number of seconds to wait between reloads. Decimals are allowed."
+        type: string
+        default: "2"
+      - name: debug
+        description: "(optional) Enable debug mode."
+        type: bool
+        default: false
+    run: |-
+      # Requirements
+      require_flags baseURL
+      require_cmds curl
+      # Get flags
+      ENCODED_REQUESTED_REQUESTED_BASE_URL="$(get_flag baseURL)"
+      ENCODED_REQUESTED_PATH="$(get_flag path)"
+      ENCODED_REQUESTED_COUNT="$(get_flag count)"
+      ENCODED_REQUESTED_TIMEOUT="$(get_flag timeout)"
+      ENCODED_REQUESTED_INTERVAL="$(get_flag interval)"
+      DEBUG="$(get_flag debug)"
+
+      # Decode flags
+      REQUESTED_BASE_URL="$(url_decode "$ENCODED_REQUESTED_REQUESTED_BASE_URL")"
+      REQUESTED_PATH="$(url_decode "$ENCODED_REQUESTED_PATH")"
+      REQUESTED_TIMEOUT="$(url_decode "$ENCODED_REQUESTED_TIMEOUT")"
+      REQUESTED_COUNT="$(url_decode "$ENCODED_REQUESTED_COUNT")"
+      REQUESTED_INTERVAL="$(url_decode "$ENCODED_REQUESTED_INTERVAL")"
+
+      # Validate base URL
+      if [[ ! "$REQUESTED_BASE_URL" =~ ^https?:// ]]; then
+        echo "Error: The baseURL ($REQUESTED_BASE_URL) must start with http:// or https://"
+        exit 1
+      fi
+
+      # Print fetch
+      [[ "$REQUESTED_COUNT" -gt 1 ]] && TIMES_STRING="${REQUESTED_COUNT} times with ${REQUESTED_INTERVAL}s pauses" || TIMES_STRING="once"
+      echo
+      echo "### Fetching ${REQUESTED_BASE_URL}${REQUESTED_PATH} $TIMES_STRING (timeout ${REQUESTED_TIMEOUT}s) ###"
+
+      i=1
+      for (( i=1; i<=$REQUESTED_COUNT; i++ )); do
+        # Print separator
+        echo
+
+        # Print count
+        echo "> Reload count: $i of $REQUESTED_COUNT"
+
+        # Do not exist if the curl timesouts or fails. On failure, RETURNED_STATUS_CODE will be 000.
+        CURL_OUT="$(curl --connect-timeout $REQUESTED_TIMEOUT --max-time $REQUESTED_TIMEOUT --insecure --silent --output /dev/null \
+          --write-out "\nRETURNED_STATUS_CODE: %{response_code}\nRETURNED_REDIRECT_URL: %{redirect_url}\nRETURNED_SIZE: %{size_download}\nRETURNED_LOAD_TIME: %{time_total}\n" \
+          "${REQUESTED_BASE_URL}${REQUESTED_PATH}" 2>/dev/null || true)"
+
+        # Debug info
+        if [ "$DEBUG" == "true" ] && [ $? -ne 0 ]; then
+          echo
+          echo "(debug) Curl returned \"error $?\". It could either be because of the timeout reached or other reasons. Here is the returned output:"
+          echo "$CURL_OUT"
+          echo
+        fi
+
+        # Define variables
+        RETURNED_STATUS_CODE="$(echo "$CURL_OUT"  | grep "RETURNED_STATUS_CODE"  | awk '{print $2}')"
+        RETURNED_REDIRECT_URL="$(echo "$RCURL_OUT" | grep "RETURNED_REDIRECT_URL" | awk '{print $2}')"
+        RETURNED_SIZE="$(echo "$CURL_OUT"         | grep "RETURNED_SIZE"         | awk '{print $2}')"
+        RETURNED_LOAD_TIME="$(echo "$CURL_OUT"    | grep "RETURNED_LOAD_TIME"    | awk '{print $2}')"
+
+        # Print results
+        echo "> Status code: $RETURNED_STATUS_CODE"
+        echo "> Redirects to: $RETURNED_REDIRECT_URL"
+        echo "> Size: $RETURNED_SIZE"
+        echo "> Load time: $RETURNED_LOAD_TIME"
+
+        sleep "$REQUESTED_INTERVAL"
+      done
+
+  require:
+    flags:
+      - name: baseURL
+        description: "(required) Base URL of the website to reload, i.e. https://example.com"
+        type: string
+      - name: path
+        description: "(required) Path to reload, i.e. /about"
+        type: string
+        default: "/"
+      - name: timeout
+        description: "(optional) Maximum time to wait for a response in seconds. Decimals are allowed."
+        type: string
+        default: "5"
+      - name: statusCode
+        description: "(optional) Expected status code, i.e. 301"
+        type: string
+        default: "200"
+      - name: redirectsTo
+        description: "(optional) Expected redirect destination. Must be a path, relative to the current website, i.e. /about"
+        type: string
+      - name: cssSelector
+        description: "(optional) CSS selector to check for existence. Use :text('some text') to check for text content. Add multiple selectors by concatenating them with a comma."
+        type: string
+      - name: antiCssSelector
+        description: "(optional) CSS selector to check for non-existence. Use :text('some text') to check for text content. Add multiple selectors by concatenating them with a comma."
+        type: string
+      - name: debug
+        default: false
+        type: bool
+    run: |-
+      # Requirements
+      require_flags baseURL
+      require_cmds curl htmlq
+
+      # Get flags
+      ENCODED_REQUESTED_BASE_URL="$(get_flag baseURL)"
+      ENCODED_REQUESTED_PATH="$(get_flag path)"
+      ENCODED_REQUESTED_TIMEOUT="$(get_flag timeout)"
+      ENCODED_REQUESTED_STATUS_CODE="$(get_flag statusCode)"
+      ENCODED_REQUESTED_REDIRECTS_TO="$(get_flag redirectsTo)"
+      ENCODED_REQUESTED_CSS_SELECTOR_CONCAT="$(get_flag cssSelector)"
+      ENCODED_REQUESTED_ANTI_CSS_SELECTOR_CONCAT="$(get_flag antiCssSelector)"
+      DEBUG="$(get_flag debug)"
+
+      # Decode flags
+      REQUESTED_BASE_URL="$(url_decode "$ENCODED_REQUESTED_BASE_URL")"
+      REQUESTED_URL_PATH="$(url_decode "$ENCODED_REQUESTED_PATH")"
+      REQUESTED_TIMEOUT="$(url_decode "$ENCODED_REQUESTED_TIMEOUT")"
+      REQUESTED_STATUS_CODE="$(url_decode "$ENCODED_REQUESTED_STATUS_CODE")"
+      REQUESTED_REDIRECTS_TO="$(url_decode "$ENCODED_REQUESTED_REDIRECTS_TO")"
+
+      # Parse concatenated flags
+      ENCODED_REQUESTED_CSS_SELECTOR_ARRAY=()
+      for selector in ${ENCODED_REQUESTED_CSS_SELECTOR_CONCAT//,/ }; do
+        ENCODED_REQUESTED_CSS_SELECTOR_ARRAY+=("$selector")
+      done
+      ENCODED_REQUESTED_ANTI_CSS_SELECTOR_ARRAY=()
+      for selector in ${ENCODED_REQUESTED_ANTI_CSS_SELECTOR_CONCAT//,/ }; do
+        ENCODED_REQUESTED_ANTI_CSS_SELECTOR_ARRAY+=("$selector")
+      done
+
+      # Validate base URL
+      if [[ ! "$REQUESTED_BASE_URL" =~ ^https?:// ]]; then
+        echo "Error: The baseURL ($REQUESTED_BASE_URL) must start with http:// or https://"
+        exit 1
+      fi
+
+      # Print fetch
+      echo
+      echo "### Fetching ${REQUESTED_BASE_URL}${REQUESTED_URL_PATH} (timeout ${REQUESTED_TIMEOUT}s) ###"
+
+      ####################
+      ### CHECK HEADER ###
+      ####################
+      FAIL_TEST="false"
+      CURL_ERROR=0
+
+      # Do not exist if the curl timesouts or fails, to collect the info. On failure, RETURNED_STATUS_CODE will be 000.
+      CURL_OUT="$(curl --connect-timeout $REQUESTED_TIMEOUT --max-time $REQUESTED_TIMEOUT --insecure --silent \
+        --write-out "\n---BEGIN WRITE-OUT---\nRETURNED_STATUS_CODE: %{response_code}\nRETURNED_REDIRECT_URL: %{redirect_url}\nRETURNED_SIZE: %{size_download}\nRETURNED_LOAD_TIME: %{time_total}\n" \
+        "${REQUESTED_BASE_URL}${REQUESTED_PATH}" 2>/dev/null || true)"
+
+      # Log error
+      if [ $? -ne 0 ]; then
+        FAIL_TEST="true"
+        CURL_ERROR="$?"
+        # Debug info
+        if [ "$DEBUG" == "true" ]; then
+          echo
+          echo "(debug) Curl returned \"error $?\". It could either be because of the timeout reached or other reasons. Here is the returned output:"
+          echo "$CURL_OUT"
+          echo
+        fi
+      fi
+      # Define variables
+
+      RETURNED_HTML="$(echo "$CURL_OUT" | perl -pe 'last if /---BEGIN WRITE-OUT---/')"
+      RETURNED_WRITE_OUT="$(echo "$CURL_OUT" | perl -0777 -pe 's/.*?---BEGIN WRITE-OUT---\n//s')"
+
+      RETURNED_STATUS_CODE="$(echo "$RETURNED_WRITE_OUT"  | grep "RETURNED_STATUS_CODE"   | awk '{print $2}')"
+      RETURNED_REDIRECT_URL="$(echo "$RETURNED_WRITE_OUT" | grep "RETURNED_REDIRECT_URL"  | awk '{print $2}')"
+      RETURNED_SIZE="$(echo "$RETURNED_WRITE_OUT"         | grep "RETURNED_SIZE"          | awk '{print $2}')"
+      RETURNED_LOAD_TIME="$(echo "$RETURNED_WRITE_OUT"    | grep "RETURNED_LOAD_TIME"     | awk '{print $2}')"
+      RETURNED_PAGE_TITLE="$(echo "$RETURNED_HTML"        | htmlq --text "title" 2>/dev/null || true)"
+
+      # Status code
+      if [[ -n "$REQUESTED_STATUS_CODE" ]] && [[ "$REQUESTED_STATUS_CODE" != "$RETURNED_STATUS_CODE" ]]; then
+        FAIL_TEST="true"
+        echo "> Status code: $RETURNED_STATUS_CODE (Fail! Expected: $REQUESTED_STATUS_CODE)"
+      else
+        echo "> Status code: $RETURNED_STATUS_CODE"
+      fi
+
+      # Redirects to
+      if [[ -n "$REQUESTED_REDIRECTS_TO" ]] && [[ "${REQUESTED_REDIRECTS_TO}" != "${RETURNED_REDIRECT_URL}" ]]; then
+        FAIL_TEST="true"
+        echo "> Redirects to: $RETURNED_REDIRECT_URL (Fail! Expected: ${REQUESTED_REDIRECTS_TO})"
+      else
+        echo "> Redirects to: $RETURNED_REDIRECT_URL"
+      fi
+
+      # Size
+      echo "> Size: $RETURNED_SIZE"
+
+      # Load time
+      echo "> Load time: $RETURNED_LOAD_TIME"
+
+      # If error, exit, as we don't have the HTML to check
+      if [ "$FAIL_TEST" == "true" ]; then
+        echo "The test failed."
+        if [ "$CURL_ERROR" -ne 0 ]; then
+          echo "Additionally, curl returned error $CURL_ERROR."
+        fi
+        exit 1
+      fi
+
+      ##################
+      ### CHECK HTML ###
+      ##################
+
+      # CSS selectors
+      echo "> Page title: $RETURNED_PAGE_TITLE"
+
+      # Check CSS selectors
+      if [[ "${#ENCODED_REQUESTED_CSS_SELECTOR_ARRAY[@]}" -gt 0 ]]; then
+        for ENCODED_REQUESTED_CSS_SELECTOR in "${ENCODED_REQUESTED_CSS_SELECTOR_ARRAY[@]}"; do
+          # Decode
+          REQUESTED_CSS_SELECTOR_AND_TEXT="$(url_decode "$ENCODED_REQUESTED_CSS_SELECTOR")"
+
+          # Extract the actual selector - removing the :text() part
+          REQUESTED_CSS_SELECTOR="$(echo "$REQUESTED_CSS_SELECTOR_AND_TEXT" | perl -n -e "/(.*?)(?=:text|$)/ && print \$1")"
+
+          # Get the value of the text() part
+          REQUESTED_TEXT="$(echo "$REQUESTED_CSS_SELECTOR_AND_TEXT" | perl -n -e "/(?<=:text\\()[\"']?([^\"']*)[\"']?(?=\\))/ && print \$1")"
+
+          # echo " Find CSS selector: $selector"
+
+          if [[ -n "$REQUESTED_TEXT" ]]; then
+            CSS_SELECTOR_STRING="> Requiring text \"$REQUESTED_TEXT\" in CSS Selector ($REQUESTED_CSS_SELECTOR)"
+          else
+            CSS_SELECTOR_STRING="> Requiring existance of CSS Selector ($REQUESTED_CSS_SELECTOR)"
+          fi
+
+          if [[ -n "$REQUESTED_TEXT" ]]; then
+            RETURNED_TEXT="$(echo "$RETURNED_HTML" | htmlq --text "$REQUESTED_CSS_SELECTOR")"
+            if [[ "$REQUESTED_TEXT" != "$RETURNED_TEXT" ]]; then
+              FAIL_TEST="true"
+              CSS_SELECTOR_STRING="$CSS_SELECTOR_STRING (Fail! Returned: $RETURNED_TEXT)"
+            fi
+          else
+            RETURNED_ELEMENT="$(echo "$RETURNED_HTML" | htmlq "$REQUESTED_CSS_SELECTOR")"
+            if [[ -z "$RETURNED_ELEMENT" ]]; then
+              FAIL_TEST="true"
+              CSS_SELECTOR_STRING="$CSS_SELECTOR_STRING (Fail! Not found)"
+            fi
+          fi
+
+          echo "$CSS_SELECTOR_STRING"
+        done
+      fi
+
+      # Check anti CSS selectors
+      if [[ "${#ENCODED_REQUESTED_ANTI_CSS_SELECTOR_ARRAY[@]}" -gt 0 ]]; then
+        for ENCODED_REQUESTED_ANTI_CSS_SELECTOR in "${ENCODED_REQUESTED_ANTI_CSS_SELECTOR_ARRAY[@]}"; do
+          # Decode
+          REQUESTED_ANTI_CSS_SELECTOR_AND_TEXT="$(url_decode "$ENCODED_REQUESTED_ANTI_CSS_SELECTOR")"
+
+          # Extract the actual selector - removing the :text() part
+          REQUESTED_ANTI_CSS_SELECTOR="$(echo "$REQUESTED_ANTI_CSS_SELECTOR_AND_TEXT" | perl -n -e "/(.*?)(?=:text|$)/ && print \$1")"
+
+          # Get the value of the text() part
+          REQUESTED_ANTI_TEXT="$(echo "$REQUESTED_ANTI_CSS_SELECTOR_AND_TEXT" | perl -n -e "/(?<=:text\\()[\"']?([^\"']*)[\"']?(?=\\))/ && print \$1")"
+
+          if [[ -n "$REQUESTED_ANTI_TEXT" ]]; then
+            ANTI_CSS_SELECTOR_STRING="> Requiring absense of text \"$REQUESTED_ANTI_TEXT\" in CSS Selector ($REQUESTED_ANTI_CSS_SELECTOR)"
+          else
+            ANTI_CSS_SELECTOR_STRING="> Requiring absense of CSS Selector ($REQUESTED_ANTI_CSS_SELECTOR)"
+          fi
+
+          if [[ -n "$REQUESTED_ANTI_TEXT" ]]; then
+            RETURNED_ANTI_TEXT="$(echo "$RETURNED_HTML" | htmlq --text "$REQUESTED_ANTI_CSS_SELECTOR")"
+            if [[ "$REQUESTED_ANTI_TEXT" == "$RETURNED_ANTI_TEXT" ]]; then
+              FAIL_TEST="true"
+              ANTI_CSS_SELECTOR_STRING="$ANTI_CSS_SELECTOR_STRING (Fail! Found: $RETURNED_ANTI_TEXT)"
+            fi
+          else
+            RETURNED_ANTI_ELEMENT="$(echo "$RETURNED_HTML" | htmlq "$REQUESTED_ANTI_CSS_SELECTOR")"
+            if [[ -n "$RETURNED_ANTI_ELEMENT" ]]; then
+              FAIL_TEST="true"
+              ANTI_CSS_SELECTOR_STRING="$ANTI_CSS_SELECTOR_STRING (Fail! Found)"
+            fi
+          fi
+
+          echo "$ANTI_CSS_SELECTOR_STRING"
+        done
+      fi
+
+      # If error, exit
+      if [ "$FAIL_TEST" == "true" ]; then
+        echo "The test failed."
+        exit 1
+      fi
+
