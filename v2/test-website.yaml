@@ -27,7 +27,7 @@ functions:
     echo "$encoded"
 
 pipelines:
-  test:
+  test-website:
     flags:
       - name: file
         description: "(required) Path to test YAML, i.e. /tmp/test.yaml"
@@ -128,8 +128,8 @@ pipelines:
             echo "(debug) Running pipeline: ${plugin}${flags_string_debug}"
           fi
 
-          echo "Running: run_pipelines ${plugin}${flags_string}"
-          run_pipelines ${plugin} ${flags_string}
+          echo "Running: run_pipelines plugin-${plugin}${flags_string}"
+          run_pipelines plugin-${plugin} ${flags_string}
         done
       done
 
@@ -138,7 +138,7 @@ pipelines:
 
 
   # Measure the performance of a website
-  performance:
+  plugin-performance:
     flags:
       - name: baseURL
         description: "(required) Base URL of the website to test, i.e. https://example.com"
@@ -182,7 +182,7 @@ pipelines:
       DEBUG="$(get_flag debug)"
 
 
-  reload:
+  plugin-reload:
     flags:
       - name: baseURL
         description: "(required) Base URL of the website to reload, i.e. https://example.com"
@@ -273,7 +273,7 @@ pipelines:
         sleep "$REQUESTED_INTERVAL"
       done
 
-  require:
+  plugin-require:
     flags:
       - name: baseURL
         description: "(required) Base URL of the website to reload, i.e. https://example.com"
