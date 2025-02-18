@@ -125,7 +125,7 @@ pipelines:
           done
           if [[ "$DEBUG" == "true" ]]; then
             echo
-            echo "(debug) Running pipeline: ${plugin}${flags_string_debug}"
+            echo "(debug) Running pipeline: plugin-${plugin}${flags_string_debug}"
           fi
 
           echo "Running: run_pipelines plugin-${plugin}${flags_string}"
