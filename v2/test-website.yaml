@@ -437,7 +437,7 @@ pipelines:
           fi
 
           if [ -n "$REQUESTED_TEXT" ]; then
-            RETURNED_TEXT='$(echo "$RETURNED_HTML" | htmlq --text "$REQUESTED_CSS_SELECTOR")'
+            RETURNED_TEXT="$(echo "$RETURNED_HTML" | htmlq --text "$REQUESTED_CSS_SELECTOR")"
             if [ "$REQUESTED_TEXT" != "$RETURNED_TEXT" ]; then
               FAIL_TEST="true"
               # If the text is too long, write the size instead of the text              
@@ -450,7 +450,7 @@ pipelines:
               CSS_SELECTOR_STRING="$CSS_SELECTOR_STRING (Fail! $RETURNED_TEXT_STRING)"
             fi
           else
-            RETURNED_ELEMENT='$(echo "$RETURNED_HTML" | htmlq "$REQUESTED_CSS_SELECTOR")'
+            RETURNED_ELEMENT="$(echo "$RETURNED_HTML" | htmlq "$REQUESTED_CSS_SELECTOR")"
             if [ -z "$RETURNED_ELEMENT" ]; then
               FAIL_TEST="true"
               CSS_SELECTOR_STRING="$CSS_SELECTOR_STRING (Fail! Not found)"
@@ -480,13 +480,13 @@ pipelines:
           fi
 
           if [ -n "$REQUESTED_ANTI_TEXT" ]; then
-            RETURNED_ANTI_TEXT='$(echo "$RETURNED_HTML" | htmlq --text "$REQUESTED_ANTI_CSS_SELECTOR")'
+            RETURNED_ANTI_TEXT="$(echo "$RETURNED_HTML" | htmlq --text "$REQUESTED_ANTI_CSS_SELECTOR")"
             if [ "$REQUESTED_ANTI_TEXT" == "$RETURNED_ANTI_TEXT" ]; then
               FAIL_TEST="true"
               ANTI_CSS_SELECTOR_STRING="$ANTI_CSS_SELECTOR_STRING (Fail! Found: $RETURNED_ANTI_TEXT)"
             fi
           else
-            RETURNED_ANTI_ELEMENT='$(echo "$RETURNED_HTML" | htmlq "$REQUESTED_ANTI_CSS_SELECTOR")'
+            RETURNED_ANTI_ELEMENT="$(echo "$RETURNED_HTML" | htmlq "$REQUESTED_ANTI_CSS_SELECTOR")"
             if [ -n "$RETURNED_ANTI_ELEMENT" ]; then
               FAIL_TEST="true"
               ANTI_CSS_SELECTOR_STRING="$ANTI_CSS_SELECTOR_STRING (Fail! Found)"
