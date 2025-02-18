@@ -430,19 +430,19 @@ pipelines:
 
           # echo " Find CSS selector: $selector"
 
-          if [[ -n "$REQUESTED_TEXT" ]]; then
+          if [ -n "$REQUESTED_TEXT" ]; then
             CSS_SELECTOR_STRING="> Requiring text \"$REQUESTED_TEXT\" in CSS Selector ($REQUESTED_CSS_SELECTOR)"
           else
             CSS_SELECTOR_STRING="> Requiring existance of CSS Selector ($REQUESTED_CSS_SELECTOR)"
           fi
 
-          if [[ -n "$REQUESTED_TEXT" ]]; then
-            RETURNED_TEXT="$(echo "$RETURNED_HTML" | htmlq --text "$REQUESTED_CSS_SELECTOR")"
-            if [[ "$REQUESTED_TEXT" != "$RETURNED_TEXT" ]]; then
+          if [ -n "$REQUESTED_TEXT" ]; then
+            RETURNED_TEXT='$(echo "$RETURNED_HTML" | htmlq --text "$REQUESTED_CSS_SELECTOR")'
+            if [ "$REQUESTED_TEXT" != "$RETURNED_TEXT" ]; then
               FAIL_TEST="true"
               # If the text is too long, write the size instead of the text              
               RETURNED_TEXT_SIZE="${#RETURNED_TEXT}"
-              if [[ "$RETURNED_TEXT_SIZE" -gt 50 ]]; then
+              if [ "$RETURNED_TEXT_SIZE" -gt 50 ]; then
                 RETURNED_TEXT_STRING="Returned (trimmed): ${RETURNED_TEXT:0:50}..."
               else
                 RETURNED_TEXT_STRING="Returned: $RETURNED_TEXT"
@@ -450,8 +450,8 @@ pipelines:
               CSS_SELECTOR_STRING="$CSS_SELECTOR_STRING (Fail! $RETURNED_TEXT_STRING)"
             fi
           else
-            RETURNED_ELEMENT="$(echo "$RETURNED_HTML" | htmlq "$REQUESTED_CSS_SELECTOR")"
-            if [[ -z "$RETURNED_ELEMENT" ]]; then
+            RETURNED_ELEMENT='$(echo "$RETURNED_HTML" | htmlq "$REQUESTED_CSS_SELECTOR")'
+            if [ -z "$RETURNED_ELEMENT" ]; then
               FAIL_TEST="true"
               CSS_SELECTOR_STRING="$CSS_SELECTOR_STRING (Fail! Not found)"
             fi
@@ -473,21 +473,21 @@ pipelines:
           # Get the value of the text() part
           REQUESTED_ANTI_TEXT="$(echo "$REQUESTED_ANTI_CSS_SELECTOR_AND_TEXT" | perl -n -e "/(?<=:text\\()[\"']?([^\"']*)[\"']?(?=\\))/ && print \$1")"
 
-          if [[ -n "$REQUESTED_ANTI_TEXT" ]]; then
+          if [ -n "$REQUESTED_ANTI_TEXT" ]; then
             ANTI_CSS_SELECTOR_STRING="> Requiring absense of text \"$REQUESTED_ANTI_TEXT\" in CSS Selector ($REQUESTED_ANTI_CSS_SELECTOR)"
           else
             ANTI_CSS_SELECTOR_STRING="> Requiring absense of CSS Selector ($REQUESTED_ANTI_CSS_SELECTOR)"
           fi
 
-          if [[ -n "$REQUESTED_ANTI_TEXT" ]]; then
-            RETURNED_ANTI_TEXT="$(echo "$RETURNED_HTML" | htmlq --text "$REQUESTED_ANTI_CSS_SELECTOR")"
-            if [[ "$REQUESTED_ANTI_TEXT" == "$RETURNED_ANTI_TEXT" ]]; then
+          if [ -n "$REQUESTED_ANTI_TEXT" ]; then
+            RETURNED_ANTI_TEXT='$(echo "$RETURNED_HTML" | htmlq --text "$REQUESTED_ANTI_CSS_SELECTOR")'
+            if [ "$REQUESTED_ANTI_TEXT" == "$RETURNED_ANTI_TEXT" ]; then
               FAIL_TEST="true"
               ANTI_CSS_SELECTOR_STRING="$ANTI_CSS_SELECTOR_STRING (Fail! Found: $RETURNED_ANTI_TEXT)"
             fi
           else
-            RETURNED_ANTI_ELEMENT="$(echo "$RETURNED_HTML" | htmlq "$REQUESTED_ANTI_CSS_SELECTOR")"
-            if [[ -n "$RETURNED_ANTI_ELEMENT" ]]; then
+            RETURNED_ANTI_ELEMENT='$(echo "$RETURNED_HTML" | htmlq "$REQUESTED_ANTI_CSS_SELECTOR")'
+            if [ -n "$RETURNED_ANTI_ELEMENT" ]; then
               FAIL_TEST="true"
               ANTI_CSS_SELECTOR_STRING="$ANTI_CSS_SELECTOR_STRING (Fail! Found)"
             fi
