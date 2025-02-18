@@ -440,7 +440,14 @@ pipelines:
             RETURNED_TEXT="$(echo "$RETURNED_HTML" | htmlq --text "$REQUESTED_CSS_SELECTOR")"
             if [[ "$REQUESTED_TEXT" != "$RETURNED_TEXT" ]]; then
               FAIL_TEST="true"
-              CSS_SELECTOR_STRING="$CSS_SELECTOR_STRING (Fail! Returned: $RETURNED_TEXT)"
+              # If the text is too long, write the size instead of the text              
+              RETURNED_TEXT_SIZE="${#RETURNED_TEXT}"
+              if [[ "$RETURNED_TEXT_SIZE" -gt 50 ]]; then
+                RETURNED_TEXT_STRING="Returned (trimmed): ${RETURNED_TEXT:0:50}..."
+              else
+                RETURNED_TEXT_STRING="Returned: $RETURNED_TEXT"
+              fi
+              CSS_SELECTOR_STRING="$CSS_SELECTOR_STRING (Fail! $RETURNED_TEXT_STRING)"
             fi
           else
             RETURNED_ELEMENT="$(echo "$RETURNED_HTML" | htmlq "$REQUESTED_CSS_SELECTOR")"
