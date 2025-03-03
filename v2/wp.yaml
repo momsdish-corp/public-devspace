@@ -1,0 +1,122 @@
+version: v2beta1
+name: devspace
+
+imports:
+  - path: base.yaml
+
+pipelines:
+  wp-db-restore:
+    flags:
+      - name: asset
+        description: "Path to the local file, or 'latest' for the last pulled file, relative to the --local-dir."
+        type: string
+        default: "latest"
+      - name: local-dir
+        description: "MYSQL dump directory."
+        type: string
+        default: "/tmp/mysql-dumps"
+    run: |-
+      # Requirements
+      require_flags asset local-dir
+      require_vars MYSQL_HOST MYSQL_PORT MYSQL_USER MYSQL_PASSWORD MYSQL_DATABASE
+      require_cmds myloader
+
+      # Get flags
+      ASSET="$(get_flag asset)"
+      LOCAL_DIR="$(get_flag local-dir)"
+
+      # If asset is 'latest', get the latest name from the .latest
+      if [ "$ASSET" = "latest" ]; then
+        echo "Fetching latest asset from $LOCAL_DIR/.latest..."
+        if [ ! -f "$LOCAL_DIR/.latest" ]; then
+          echo "Error: $LOCAL_DIR/.latest does not exist."
+          exit 1
+        fi
+        if [ ! -s "$LOCAL_DIR/.latest" ]; then
+          echo "Error: $LOCAL_DIR/.latest is empty."
+          exit 1
+        fi
+        ASSET="$(cat $LOCAL_DIR/.latest)"
+      fi
+
+      # If asset is not a file, exit
+      if [ ! -f "$LOCAL_DIR/$ASSET" ]; then
+        echo "Error: $LOCAL_DIR/$ASSET does not exist."
+        exit 1
+      fi
+
+      # Create a temporary directory
+      TMP_DIR="$LOCAL_DIR/unpacked"
+      rm -rf $TMP_DIR && mkdir -p $TMP_DIR
+
+      # Unpack the asset
+      echo "Unpacking $LOCAL_DIR/$ASSET..."
+      tar -xzvf $LOCAL_DIR/$ASSET -C $TMP_DIR
+
+      # Restore the dump
+      echo "Restoring $LOCAL_DIR/$ASSET..."
+      myloader --threads=1 --max-threads-for-schema-creation=1 --max-threads-per-table=1 --database=$MYSQL_DATABASE --directory=$TMP_DIR --overwrite-tables --verbose=3
+
+      # Cleanup
+      echo "Cleaning up..."
+      rm -rf $TMP_DIR
+
+      echo "Done."
+
+  wp-db-dump:
+    flags:
+      - name: asset
+        description: "The name of the dump file. Extension will be added automatically. Default: YYYYY/MM/development-YYYYMMDDT####Z."
+        type: string
+      - name: local-dir
+        description: "MYSQL dump directory."
+        type: string
+        default: "/tmp/mysql-dumps"
+      - name: update-marker
+        description: "Update .latest marker on --local-dir. Default: true."
+        type: bool
+        default: true
+    run: |-
+      # Requirements
+      require_flags local-dir update-marker
+      require_vars MYSQL_HOST MYSQL_PORT MYSQL_USER MYSQL_PASSWORD MYSQL_DATABASE
+      require_cmds mydumper
+
+      # Get flags
+      ASSET="$(get_flag asset)"
+      LOCAL_DIR="$(get_flag local-dir)"
+      UPDATE_MARKER="$(get_flag update-marker)"
+
+      # If asset is empty, generate a default name
+      if [ -z "$ASSET" ]; then
+        ASSET="$(date +%Y/%m)/development-$(date -u +"%Y%m%dT%H%M%SZ")"
+      fi
+
+      # Remove the .tar.gz extension if it exists
+      ASSET="${ASSET%.tar.gz}"
+
+      # Create a temporary directory
+      TMP_DIR="$LOCAL_DIR/unpacked"
+      rm -rf $TMP_DIR && mkdir -p $TMP_DIR
+
+      # Dump the database
+      echo "Dumping $MYSQL_DATABASE to $TMP_DIR..."
+      mydumper --outputdir=$TMP_DIR
+
+      # Pack the dump
+      mkdir -p $(dirname $LOCAL_DIR/$ASSET.tar.gz)
+      echo "Packing $TMP_DIR to $LOCAL_DIR/$ASSET.tar.gz..."
+      tar -czvf $LOCAL_DIR/$ASSET.tar.gz -C $TMP_DIR .
+      ls -lh $LOCAL_DIR/$ASSET.tar.gz
+
+      # Update the .latest marker
+      if [ "$UPDATE_MARKER" = "true" ]; then
+        echo "Updating $LOCAL_DIR/.latest..."
+        echo "$ASSET.tar.gz" > $LOCAL_DIR/.latest
+      fi
+
+      # Cleanup
+      echo "Cleaning up..."
+      rm -rf $TMP_DIR
+
+      echo "Done."
