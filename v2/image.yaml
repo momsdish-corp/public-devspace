@@ -15,7 +15,7 @@ pipelines:
       - name: dockerfile
         description: Fill path to the Dockerfile, relative to project dir. A .labels file will be created in the same directory as the Dockerfile.
         type: string
-      - name: git-commit-messages
+      - name: log-commit-messages
         description: "Output directory for the git commit logs. If set, creates a file with commit message and all changed assets."
         type: string
     run: |-
