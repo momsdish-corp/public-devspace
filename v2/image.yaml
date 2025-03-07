@@ -15,10 +15,10 @@ pipelines:
       - name: dockerfile
         description: Fill path to the Dockerfile, relative to project dir. A .labels file will be created in the same directory as the Dockerfile.
         type: string
-      - name: git-commit-logs
+      - name: git-commit-messages
         description: "Output directory for the git commit logs. Creates a file with commit message and changed files and directories."
         type: string
-        default: "/tmp/git-commit-logs"
+        default: "/tmp/git-commit-messages"
     run: |-
       # Requirements
       require_cmds skopeo jq
