@@ -16,16 +16,15 @@ pipelines:
         description: Fill path to the Dockerfile, relative to project dir. A .labels file will be created in the same directory as the Dockerfile.
         type: string
       - name: git-commit-messages
-        description: "Output directory for the git commit logs. Creates a file with commit message and changed files and directories."
+        description: "Output directory for the git commit logs. If set, creates a file with commit message and all changed assets."
         type: string
-        default: "/tmp/git-commit-messages"
     run: |-
       # Requirements
       require_cmds skopeo jq
 
       # Get flags
       DOCKERFILE="$(get_flag dockerfile)"
-      GIT_COMMIT_MESSAGES="$(get_flag git-commit-messages)"
+      LOG_COMMIT_MESSAGES="$(get_flag git-commit-messages)"
 
       # Require vars
       require_vars DOCKERFILE
@@ -71,20 +70,20 @@ pipelines:
         echo "$LATEST_IMAGE_LABELS" > "$LABELS_FILE"
         NEW_BASE_IMAGE_REF="$(grep -oP 'org.opencontainers.image.ref.name: \K.*' "${LABELS_FILE}")"
 
-        # If GIT_COMMIT_MESSAGES is set, log the changes
-        if [ -n "$GIT_COMMIT_MESSAGES" ]; then
+        # If LOG_COMMIT_MESSAGES is set, log the changes
+        if [ -n "$LOG_COMMIT_MESSAGES" ]; then
             # Make sure the directory exists
-            mkdir -p $GIT_COMMIT_MESSAGES
+            mkdir -p $LOG_COMMIT_MESSAGES
 
             # Log the changes
-            LOG_FILE="$GIT_COMMIT_MESSAGES/$(date +%s)-labels.log"
+            LOG_FILE="$LOG_COMMIT_MESSAGES/$(date +%s)-labels.log"
 
             touch "$LOG_FILE"
             echo "Update $IMAGE_NAME labels from $BASE_IMAGE_REF to $NEW_BASE_IMAGE_REF" >> "$LOG_FILE"
             echo "$LABELS_FILE" >> "$LOG_FILE"
           fi
 
-        echo "$GIT_COMMIT_MESSAGES updated."
+        echo "$LOG_COMMIT_MESSAGES updated."
       else
         echo "No changes to labels."
       fi
