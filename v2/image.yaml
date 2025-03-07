@@ -25,7 +25,7 @@ pipelines:
 
       # Get flags
       DOCKERFILE="$(get_flag dockerfile)"
-      LOG_DIR="$(get_flag log-dir)"
+      GIT_COMMIT_MESSAGES="$(get_flag git-commit-messages)"
 
       # Require vars
       require_vars DOCKERFILE
@@ -71,20 +71,20 @@ pipelines:
         echo "$LATEST_IMAGE_LABELS" > "$LABELS_FILE"
         NEW_BASE_IMAGE_REF="$(grep -oP 'org.opencontainers.image.ref.name: \K.*' "${LABELS_FILE}")"
 
-        # If LOG_DIR is set, log the changes
-        if [ -n "$LOG_DIR" ]; then
+        # If GIT_COMMIT_MESSAGES is set, log the changes
+        if [ -n "$GIT_COMMIT_MESSAGES" ]; then
             # Make sure the directory exists
-            mkdir -p $LOG_DIR
+            mkdir -p $GIT_COMMIT_MESSAGES
 
             # Log the changes
-            LOG_FILE="$LOG_DIR/$(date +%s)-labels.log"
+            LOG_FILE="$GIT_COMMIT_MESSAGES/$(date +%s)-labels.log"
 
             touch "$LOG_FILE"
             echo "Update $IMAGE_NAME labels from $BASE_IMAGE_REF to $NEW_BASE_IMAGE_REF" >> "$LOG_FILE"
             echo "$LABELS_FILE" >> "$LOG_FILE"
           fi
 
-        echo "$LOG_DIR updated."
+        echo "$GIT_COMMIT_MESSAGES updated."
       else
         echo "No changes to labels."
       fi
