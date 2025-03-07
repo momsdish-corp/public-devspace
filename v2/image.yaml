@@ -1,0 +1,90 @@
+# Description: Image related pipelines
+#
+# Commands:
+#   - image-update-labels: Update the labels of the base image in the Dockerfile
+#
+version: v2beta1
+name: devspace
+
+imports:
+  - path: base.yaml
+
+pipelines:
+  image-update-labels:
+    flags:
+      - name: dockerfile
+        description: Fill path to the Dockerfile, relative to project dir. A .labels file will be created in the same directory as the Dockerfile.
+        type: string
+      - name: git-commit-logs
+        description: "Output directory for the git commit logs. Creates a file with commit message and changed files and directories."
+        type: string
+        default: "/tmp/git-commit-logs"
+    run: |-
+      # Requirements
+      require_cmds skopeo jq
+
+      # Get flags
+      DOCKERFILE="$(get_flag dockerfile)"
+      LOG_DIR="$(get_flag log-dir)"
+
+      # Require vars
+      require_vars DOCKERFILE
+
+      # Validate
+      if [ ! -f "$DOCKERFILE" ]; then
+        echo "Dockerfile not found in $DOCKERFILE"
+        exit 1
+      fi
+
+      # Extract the base image name from dockerfile
+      BASE_IMAGE=$(grep '^FROM' "$DOCKERFILE" | head -n1 | awk '{print $2}' | cut -d' ' -f1)
+      if [ -z "$BASE_IMAGE" ]; then
+        echo "Can not find the base image in $DOCKERFILE"
+        exit 1
+      fi
+
+      # Define variables
+      LABELS_FILE="$(dirname $DOCKERFILE)/.labels"
+      IMAGE_NAME=$(basename $(dirname $DOCKERFILE))
+
+      # Get the latest image labels
+      echo "Fetching latest labels from $BASE_IMAGE"
+      LATEST_IMAGE_LABELS="$(skopeo inspect docker://$BASE_IMAGE| jq -r '.Labels | to_entries | map(.key + ": " + .value) | .[]')"
+
+      echo "Comparing the latest labels with the currently used labels in $LABELS_FILE"
+      echo
+      echo "Current labels:"
+      if [ ! -f "$LABELS_FILE" ]; then
+        echo "No labels file found."
+      else
+        cat $LABELS_FILE
+      fi
+
+      if [ ! -f $LABELS_FILE ] || [ "$LATEST_IMAGE_LABELS" != "$(cat "$LABELS_FILE")" ]; then
+        echo "$LATEST_IMAGE_LABELS" > "$LABELS_FILE"
+        echo
+        echo "New labels:"
+        echo "$LATEST_IMAGE_LABELS"
+
+        # Update the .labels file. Get old and new base image references
+        BASE_IMAGE_REF="$(grep -oP 'org.opencontainers.image.ref.name: \K.*' "${LABELS_FILE}")"
+        echo "$LATEST_IMAGE_LABELS" > "$LABELS_FILE"
+        NEW_BASE_IMAGE_REF="$(grep -oP 'org.opencontainers.image.ref.name: \K.*' "${LABELS_FILE}")"
+
+        # If LOG_DIR is set, log the changes
+        if [ -n "$LOG_DIR" ]; then
+            # Make sure the directory exists
+            mkdir -p $LOG_DIR
+
+            # Log the changes
+            LOG_FILE="$LOG_DIR/$(date +%s)-labels.log"
+
+            touch "$LOG_FILE"
+            echo "Update $IMAGE_NAME labels from $BASE_IMAGE_REF to $NEW_BASE_IMAGE_REF" >> "$LOG_FILE"
+            echo "$LABELS_FILE" >> "$LOG_FILE"
+          fi
+
+        echo "$LOG_DIR updated."
+      else
+        echo "No changes to labels."
+      fi
