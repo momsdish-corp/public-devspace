@@ -1,3 +1,8 @@
+# Description: Test a website by running a series of tests defined in a YAML file.
+#
+# Commands:
+#   - website-test: Test a website by running a series of tests defined in a YAML file.
+#
 version: v2beta1
 name: devspace
 

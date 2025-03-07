@@ -1,3 +1,11 @@
+# Description: Base functions for DevSpace
+#
+# Functions:
+#   - require_vars: Require variables to be set
+#   - require_flags: Require a pipeline flag to be set
+#   - require_cmds: Require commands to be installed
+#   - get_pod_by_label: Output the pod name or return error
+#
 version: v2beta1
 name: devspace
 

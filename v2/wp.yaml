@@ -1,3 +1,9 @@
+# Description: WordPress related pipelines
+#
+# Commands:
+#   - wp-db-restore: Restore a MySQL dump to the database
+#   - wp-db-dump: Dump the MySQL database
+#
 version: v2beta1
 name: devspace
 

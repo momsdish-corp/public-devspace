@@ -1,3 +1,11 @@
+# Description: S3 pipeline commands for uploading, downloading, and syncing files to and from an S3 bucket.
+#
+# Commands:
+#   - s3-push: Push a file or directory to an S3 bucket
+#   - s3-pull: Pull a file or directory from an S3 bucket
+#   - s3-push-sync: Syncs a local directory to an S3 bucket
+#   - s3-pull-sync: Syncs a S3 bucket to a local directory or pod
+#
 version: v2beta1
 name: devspace
 
