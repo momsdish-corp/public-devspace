@@ -68,7 +68,7 @@ pipelines:
       echo "Cleaning up..."
       rm -rf $TMP_DIR
 
-      echo "Done."
+      echo "wp-db-restore completed."
 
   wp-db-dump:
     flags:
@@ -126,7 +126,7 @@ pipelines:
       echo "Cleaning up..."
       rm -rf $TMP_DIR
 
-      echo "Done."
+      echo "wp-db-dump completed."
 
   # Pull the latest dump from the S3 bucket
   wp-db-pull: |-
@@ -146,7 +146,7 @@ pipelines:
     # Cleanup
     rm -rf $TMP_DIR
     
-    echo "Done."
+    echo "wp-db-pull completed."
 
   # Push the latest dump to the S3 bucket
   wp-db-push: |-
@@ -166,4 +166,4 @@ pipelines:
     # Cleanup
     rm -rf $TMP_DIR
     
-    echo "Done."
+    echo "wp-db-push completed."
