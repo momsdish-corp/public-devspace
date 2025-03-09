@@ -129,41 +129,69 @@ pipelines:
       echo "wp-db-dump completed."
 
   # Pull the latest dump from the S3 bucket
-  wp-db-pull: |-
-    # Require vars
-    require_vars PROJECT_NAME
-    
-    # Create a temporary directory
-    TMP_DIR="/tmp/mysql-pull"
-    rm -rf $TMP_DIR && mkdir -p $TMP_DIR
-    
-    # Pull the latest dump
-    run_pipelines s3-pull --set-flag=remote-dir=$PROJECT_NAME/mysql --set-flag=local-dir=$TMP_DIR
-    
-    # Import the dump
-    run_pipelines wp-db-restore --set-flag=local-dir=$TMP_DIR
-    
-    # Cleanup
-    rm -rf $TMP_DIR
-    
-    echo "wp-db-pull completed."
+  wp-db-pull:
+    flags:
+      - name: project-name
+        description: "Optionally, override the $PROJECT_NAME variable. Useful if the $PROJECT_NAME environment variable is not available in the container."
+        type: string
+        default: ""
+    run: |-
+      # Get flags
+      PROJECT_NAME_FLAG="$(get_flag project-name)"
+      
+      # Set the project name
+      if [ -n "$PROJECT_NAME_FLAG" ]; then
+        PROJECT_NAME="$PROJECT_NAME_FLAG"
+      fi
+      
+      # Require vars
+      require_vars PROJECT_NAME
+      
+      # Create a temporary directory
+      TMP_DIR="/tmp/mysql-pull"
+      rm -rf $TMP_DIR && mkdir -p $TMP_DIR
+      
+      # Pull the latest dump
+      run_pipelines s3-pull --set-flag=remote-dir=$PROJECT_NAME/mysql --set-flag=local-dir=$TMP_DIR
+      
+      # Import the dump
+      run_pipelines wp-db-restore --set-flag=local-dir=$TMP_DIR
+      
+      # Cleanup
+      rm -rf $TMP_DIR
+      
+      echo "wp-db-pull completed."
 
   # Push the latest dump to the S3 bucket
-  wp-db-push: |-
-    # Require vars
-    require_vars PROJECT_NAME
-    
-    # Create a temporary directory
-    TMP_DIR="/tmp/mysql-push"
-    rm -rf $TMP_DIR && mkdir -p $TMP_DIR
-    
-    # Export the dump
-    run_pipelines wp-db-dump --set-flag=local-dir=$TMP_DIR
-    
-    # Push the dump
-    run_pipelines s3-push --set-flag=local-dir=$TMP_DIR --set-flag=remote-dir=$PROJECT_NAME/mysql
-    
-    # Cleanup
-    rm -rf $TMP_DIR
-    
-    echo "wp-db-push completed."
+  wp-db-push:
+    flags:
+      - name: project-name
+        description: "Optionally, override the $PROJECT_NAME variable. Useful if the $PROJECT_NAME environment variable is not available in the container."
+        type: string
+        default: ""
+    run: |-
+      # Get flags
+      PROJECT_NAME_FLAG="$(get_flag project-name)"
+      
+      # Set the project name
+      if [ -n "$PROJECT_NAME_FLAG" ]; then
+        PROJECT_NAME="$PROJECT_NAME_FLAG"
+      fi
+      
+      # Require vars
+      require_vars PROJECT_NAME
+      
+      # Create a temporary directory
+      TMP_DIR="/tmp/mysql-push"
+      rm -rf $TMP_DIR && mkdir -p $TMP_DIR
+      
+      # Export the dump
+      run_pipelines wp-db-dump --set-flag=local-dir=$TMP_DIR
+      
+      # Push the dump
+      run_pipelines s3-push --set-flag=local-dir=$TMP_DIR --set-flag=remote-dir=$PROJECT_NAME/mysql
+      
+      # Cleanup
+      rm -rf $TMP_DIR
+      
+      echo "wp-db-push completed."
