@@ -9,6 +9,7 @@ name: devspace
 
 imports:
   - path: base.yaml
+  - path: s3.yaml
 
 pipelines:
   wp-db-restore:
@@ -126,3 +127,41 @@ pipelines:
       rm -rf $TMP_DIR
 
       echo "Done."
+
+  wp-db-pull: |-
+    # Require vars
+    require_vars PROJECT_NAME
+    
+    # Create a temporary directory
+    TMP_DIR="/tmp/mysql-pull"
+    rm -rf $TMP_DIR && mkdir -p $TMP_DIR
+    
+    # Pull the latest dump
+    run_pipelines s3-pull --set-flag=remote-dir=$PROJECT_NAME/mysql --local-dir=$TMP_DIR
+    
+    # Import the dump
+    run_pipelines wp-db-restore --set-flag=local-dir=$TMP_DIR
+    
+    # Cleanup
+    rm -rf $TMP_DIR
+    
+    echo "Done."
+
+  wp-db-push: |-
+    # Require vars
+    require_vars PROJECT_NAME
+    
+    # Create a temporary directory
+    TMP_DIR="/tmp/mysql-push"
+    rm -rf $TMP_DIR && mkdir -p $TMP_DIR
+    
+    # Export the dump
+    run_pipelines wp-db-dump --set-flag=local-dir=$TMP_DIR
+    
+    # Push the dump
+    run_pipelines s3-push --set-flag=local-dir=$TMP_DIR --remote-dir=$PROJECT_NAME/mysql
+    
+    # Cleanup
+    rm -rf $TMP_DIR
+    
+    echo "Done."
