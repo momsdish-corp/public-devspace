@@ -128,6 +128,7 @@ pipelines:
 
       echo "Done."
 
+  # Pull the latest dump from the S3 bucket
   wp-db-pull: |-
     # Require vars
     require_vars PROJECT_NAME
@@ -147,6 +148,7 @@ pipelines:
     
     echo "Done."
 
+  # Push the latest dump to the S3 bucket
   wp-db-push: |-
     # Require vars
     require_vars PROJECT_NAME
