@@ -137,7 +137,7 @@ pipelines:
     rm -rf $TMP_DIR && mkdir -p $TMP_DIR
     
     # Pull the latest dump
-    run_pipelines s3-pull --set-flag=remote-dir=$PROJECT_NAME/mysql --local-dir=$TMP_DIR
+    run_pipelines s3-pull --set-flag=remote-dir=$PROJECT_NAME/mysql --set-flag=local-dir=$TMP_DIR
     
     # Import the dump
     run_pipelines wp-db-restore --set-flag=local-dir=$TMP_DIR
@@ -159,7 +159,7 @@ pipelines:
     run_pipelines wp-db-dump --set-flag=local-dir=$TMP_DIR
     
     # Push the dump
-    run_pipelines s3-push --set-flag=local-dir=$TMP_DIR --remote-dir=$PROJECT_NAME/mysql
+    run_pipelines s3-push --set-flag=local-dir=$TMP_DIR --set-flag=remote-dir=$PROJECT_NAME/mysql
     
     # Cleanup
     rm -rf $TMP_DIR
