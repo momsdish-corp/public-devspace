@@ -183,7 +183,6 @@ pipelines:
       REQUIRE_TRIMMED_MEAN="$(get_flag requireTrimmedMean)"
       DEBUG="$(get_flag debug)"
 
-
   website-test-plugin-reload:
     flags:
       - name: baseURL
