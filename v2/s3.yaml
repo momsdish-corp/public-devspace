@@ -343,7 +343,7 @@ pipelines:
 
         # Get list of all files on the pod
         echo && echo "Fetching a list of files on $LOCAL_DIR..."
-        POD_FILES=$(kubectl exec -n "$POD_NAMESPACE" "$POD_NAME" -- find "$POD_PATH" -type f 2>/dev/null | sed "s|^${POD_PATH}/||")
+        POD_FILES=$(kubectl exec -n "$POD_NAMESPACE" "$POD_NAME" -- find "/$POD_PATH" -type f 2>/dev/null | sed "s|^/${POD_PATH}/||")
         [ -n "$POD_FILES" ] && echo "$POD_FILES" || echo "No files found on the pod"
 
         # Get complete list of files on S3
@@ -488,7 +488,7 @@ pipelines:
 
         # Get list of all files on the pod
         echo && echo "Fetching a list of files on $LOCAL_DIR..."
-        POD_FILES=$(kubectl exec -n "$POD_NAMESPACE" "$POD_NAME" -- find "$POD_PATH" -type f 2>/dev/null | sed "s|^${POD_PATH}/||")
+        POD_FILES=$(kubectl exec -n "$POD_NAMESPACE" "$POD_NAME" -- find "/$POD_PATH" -type f 2>/dev/null | sed "s|^/${POD_PATH}/||")
         [ -n "$POD_FILES" ] && echo "$POD_FILES" || echo "No files found on the pod"
 
         # Determine new files: those present on S3 but missing on the pod
