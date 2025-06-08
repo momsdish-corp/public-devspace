@@ -85,7 +85,7 @@ pipelines:
 
       # AWS CLI Flags
       AWS_S3_FLAGS=""
-      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_FLAGS="$AWS_S3_FLAGS --checksum-algorithm CRC32=$S3_CHECKSUM_ALGORITHM"
+      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_FLAGS="$AWS_S3_FLAGS --checksum-algorithm=$S3_CHECKSUM_ALGORITHM"
 
       # Strip trailing slashes
       REMOTE_DIR=$(echo "$REMOTE_DIR" | sed 's|/$||')
@@ -203,7 +203,7 @@ pipelines:
 
       # AWS CLI Flags
       AWS_S3_FLAGS=""
-      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_FLAGS="$AWS_S3_FLAGS --checksum-algorithm CRC32=$S3_CHECKSUM_ALGORITHM"
+      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_FLAGS="$AWS_S3_FLAGS --checksum-algorithm=$S3_CHECKSUM_ALGORITHM"
 
       # Strip trailing slashes
       REMOTE_DIR=$(echo "$REMOTE_DIR" | sed 's|/$||')
@@ -333,7 +333,7 @@ pipelines:
 
       # AWS CLI Flags
       AWS_S3_FLAGS=""
-      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_FLAGS="$AWS_S3_FLAGS --checksum-algorithm CRC32=$S3_CHECKSUM_ALGORITHM"
+      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_FLAGS="$AWS_S3_FLAGS --checksum-algorithm=$S3_CHECKSUM_ALGORITHM"
       
       # Define vars
       [ "$DEBUG" == "true" ] && DEBUG_FLAG="--debug" || DEBUG_FLAG=""
@@ -477,7 +477,7 @@ pipelines:
 
       # AWS CLI Flags
       AWS_S3_FLAGS=""
-      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_FLAGS="$AWS_S3_FLAGS --checksum-algorithm CRC32=$S3_CHECKSUM_ALGORITHM"
+      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_FLAGS="$AWS_S3_FLAGS --checksum-algorithm=$S3_CHECKSUM_ALGORITHM"
 
       # Define vars
       [ "$DEBUG" == "true" ] && DEBUG_FLAG="--debug" || DEBUG_FLAG=""
