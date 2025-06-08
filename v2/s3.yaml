@@ -84,8 +84,7 @@ pipelines:
       export AWS_ENDPOINT_URL=$S3_ENDPOINT_URL
 
       # AWS CLI Flags
-      AWS_S3_FLAGS=""
-      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_FLAGS="$AWS_S3_FLAGS --checksum-algorithm=$S3_CHECKSUM_ALGORITHM"
+      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_CHECKSUM_ALGORITHM_FLAG="--checksum-algorithm=$S3_CHECKSUM_ALGORITHM" || AWS_S3_CHECKSUM_ALGORITHM_FLAG=""
 
       # Strip trailing slashes
       REMOTE_DIR=$(echo "$REMOTE_DIR" | sed 's|/$||')
@@ -117,13 +116,13 @@ pipelines:
         kubectl cp "$POD_REF:$POD_PATH/$ASSET" "$TMP_DIR/$ASSET"
 
         # Upload the asset to S3
-        aws s3 cp $AWS_S3_FLAGS $DEBUG_FLAG $RECURSIVE_FLAG "$TMP_DIR/$ASSET" "$S3_URL/$ASSET"
+        aws s3 cp $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG $RECURSIVE_FLAG "$TMP_DIR/$ASSET" "$S3_URL/$ASSET"
 
         # Optionally update .latest
         if [ "$UPDATE_MARKER" == "true" ]; then
           echo "Setting .latest to $ASSET"
           echo "$ASSET" > "$TMP_DIR/.latest"
-          aws s3 cp $AWS_S3_FLAGS $DEBUG_FLAG "$TMP_DIR/.latest" "$S3_URL/.latest"
+          aws s3 cp $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG "$TMP_DIR/.latest" "$S3_URL/.latest"
         fi
 
         # Clean up temporary directory
@@ -132,14 +131,14 @@ pipelines:
         # Upload the asset to S3
         echo "Uploading $LOCAL_DIR/$ASSET to $S3_URL"
 
-        echo "aws s3 cp $AWS_S3_FLAGS $DEBUG_FLAG $RECURSIVE_FLAG $LOCAL_DIR/$ASSET $S3_URL/$ASSET"
-        aws s3 cp $AWS_S3_FLAGS $DEBUG_FLAG $RECURSIVE_FLAG "$LOCAL_DIR/$ASSET" "$S3_URL/$ASSET"
+        echo "aws s3 cp $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG $RECURSIVE_FLAG $LOCAL_DIR/$ASSET $S3_URL/$ASSET"
+        aws s3 cp $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG $RECURSIVE_FLAG "$LOCAL_DIR/$ASSET" "$S3_URL/$ASSET"
 
         # Optionally update .latest
         if [ "$UPDATE_MARKER" == "true" ]; then
           echo "Updating .latest"
           echo "$ASSET" > "$LOCAL_DIR/.latest"
-          aws s3 cp $AWS_S3_FLAGS $DEBUG_FLAG "$LOCAL_DIR/.latest" "$S3_URL/.latest"
+          aws s3 cp $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG "$LOCAL_DIR/.latest" "$S3_URL/.latest"
         fi
       fi
 
@@ -202,8 +201,7 @@ pipelines:
       export AWS_ENDPOINT_URL=$S3_ENDPOINT_URL
 
       # AWS CLI Flags
-      AWS_S3_FLAGS=""
-      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_FLAGS="$AWS_S3_FLAGS --checksum-algorithm=$S3_CHECKSUM_ALGORITHM"
+      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_CHECKSUM_ALGORITHM_FLAG="--checksum-algorithm=$S3_CHECKSUM_ALGORITHM" || AWS_S3_CHECKSUM_ALGORITHM_FLAG=""
 
       # Strip trailing slashes
       REMOTE_DIR=$(echo "$REMOTE_DIR" | sed 's|/$||')
@@ -216,7 +214,7 @@ pipelines:
       # If latest is set, get the latest asset from S3
       if [ "$ASSET" == "latest" ]; then
         echo "Fetching latest asset from $S3_URL"
-        ASSET=$(aws s3 cp $AWS_S3_FLAGS $DEBUG_FLAG "$S3_URL/.latest" - | tr -d '\n')
+        ASSET=$(aws s3 cp $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG "$S3_URL/.latest" - | tr -d '\n')
         if [ -n "$ASSET" ]; then
           echo "Latest asset is $ASSET"
         else
@@ -244,7 +242,7 @@ pipelines:
         mkdir -p "$TMP_DIR"
 
         # Download the asset from S3
-        aws s3 cp $AWS_S3_FLAGS $DEBUG_FLAG $RECURSIVE_FLAG "$S3_URL/$ASSET" "$TMP_DIR/$ASSET"
+        aws s3 cp $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG $RECURSIVE_FLAG "$S3_URL/$ASSET" "$TMP_DIR/$ASSET"
 
         # Create the directory on the pod if it doesn't exist
         kubectl exec -n "$POD_NAMESPACE" "$POD_NAME" -- mkdir -p "$(dirname "$POD_PATH/$ASSET")"
@@ -267,7 +265,7 @@ pipelines:
 
         # Download the asset from S3
         echo "Downloading $S3_URL/$ASSET to $LOCAL_DIR/$ASSET"
-        aws s3 cp $AWS_S3_FLAGS $DEBUG_FLAG $RECURSIVE_FLAG "$S3_URL/$ASSET" "$LOCAL_DIR/$ASSET"
+        aws s3 cp $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG $RECURSIVE_FLAG "$S3_URL/$ASSET" "$LOCAL_DIR/$ASSET"
 
         # Optionally update .latest
         if [ "$UPDATE_MARKER" == "true" ]; then
@@ -332,8 +330,7 @@ pipelines:
       export AWS_ENDPOINT_URL=$S3_ENDPOINT_URL
 
       # AWS CLI Flags
-      AWS_S3_FLAGS=""
-      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_FLAGS="$AWS_S3_FLAGS --checksum-algorithm=$S3_CHECKSUM_ALGORITHM"
+      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_CHECKSUM_ALGORITHM_FLAG="--checksum-algorithm=$S3_CHECKSUM_ALGORITHM" || AWS_S3_CHECKSUM_ALGORITHM_FLAG=""
       
       # Define vars
       [ "$DEBUG" == "true" ] && DEBUG_FLAG="--debug" || DEBUG_FLAG=""
@@ -360,7 +357,7 @@ pipelines:
 
         # Get complete list of files on S3
         echo && echo "Fetching a list of files on $S3_URL..."
-        S3_FILES=$(aws s3 ls "$S3_URL" --recursive $AWS_S3_FLAGS $DEBUG_FLAG 2>/dev/null | awk '{print $4}' | sed "s|^${REMOTE_DIR}/||")
+        S3_FILES=$(aws s3 ls "$S3_URL" --recursive $DEBUG_FLAG 2>/dev/null | awk '{print $4}' | sed "s|^${REMOTE_DIR}/||")
         [ -n "$S3_FILES" ] && echo "$S3_FILES" || echo "No files found on s3"
 
         # Determine new files: those present on the pod but missing on S3
@@ -380,7 +377,7 @@ pipelines:
           for NEW_FILE in "${NEW_FILES[@]}"; do
             mkdir -p "$(dirname "$TMP_DIR/$NEW_FILE")"
             kubectl cp "$POD_NAMESPACE/$POD_NAME:$POD_PATH/$NEW_FILE" "$TMP_DIR/$NEW_FILE"
-            aws s3 cp $AWS_S3_FLAGS $DEBUG_FLAG "$TMP_DIR/$NEW_FILE" "$S3_URL/$NEW_FILE"
+            aws s3 cp $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG "$TMP_DIR/$NEW_FILE" "$S3_URL/$NEW_FILE"
           done
         else
           echo && echo "No new files to upload to S3."
@@ -401,7 +398,7 @@ pipelines:
             echo "Deleting ${#ORPHANED_FILES[@]} orphaned file(s) from S3..."
             for ORPHANED_FILE in "${ORPHANED_FILES[@]}"; do
               echo "Deleting $ORPHANED_FILE from S3"
-              aws s3 rm $AWS_S3_FLAGS $DEBUG_FLAG "$S3_URL/$ORPHANED_FILE"
+              aws s3 rm $DEBUG_FLAG "$S3_URL/$ORPHANED_FILE"
             done
           else
             echo "No orphaned files to delete on S3."
@@ -414,9 +411,9 @@ pipelines:
         # Local directory mode: Use native aws s3 sync
         echo "Local directory detected. Running aws s3 sync..."
         if [ "$CLEANUP" == "true" ]; then
-          aws s3 sync $AWS_S3_FLAGS $DEBUG_FLAG --delete "$LOCAL_DIR" "$S3_URL"
+          aws s3 sync $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG --delete "$LOCAL_DIR" "$S3_URL"
         else
-          aws s3 sync $AWS_S3_FLAGS $DEBUG_FLAG "$LOCAL_DIR" "$S3_URL"
+          aws s3 sync $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG "$LOCAL_DIR" "$S3_URL"
         fi
       fi
 
@@ -476,8 +473,7 @@ pipelines:
       export AWS_ENDPOINT_URL=$S3_ENDPOINT_URL
 
       # AWS CLI Flags
-      AWS_S3_FLAGS=""
-      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_FLAGS="$AWS_S3_FLAGS --checksum-algorithm=$S3_CHECKSUM_ALGORITHM"
+      [[ -n "$S3_CHECKSUM_ALGORITHM" ]] && AWS_S3_CHECKSUM_ALGORITHM_FLAG="--checksum-algorithm=$S3_CHECKSUM_ALGORITHM" || AWS_S3_CHECKSUM_ALGORITHM_FLAG=""
 
       # Define vars
       [ "$DEBUG" == "true" ] && DEBUG_FLAG="--debug" || DEBUG_FLAG=""
@@ -499,7 +495,7 @@ pipelines:
 
         # Get complete list of files on S3
         echo && echo "Fetching a list of files on $S3_URL..."
-        S3_FILES=$(aws s3 ls "$S3_URL" --recursive $AWS_S3_FLAGS $DEBUG_FLAG 2>/dev/null | awk '{print $4}' | sed "s|^${REMOTE_DIR}/||")
+        S3_FILES=$(aws s3 ls "$S3_URL" --recursive $DEBUG_FLAG 2>/dev/null | awk '{print $4}' | sed "s|^${REMOTE_DIR}/||")
         [ -n "$S3_FILES" ] && echo "$S3_FILES" || echo "No files found on s3"
 
         # Get list of all files on the pod
@@ -523,7 +519,7 @@ pipelines:
           echo && echo "Downloading ${#NEW_FILES[@]} new file(s) to pod..."
           for NEW_FILE in "${NEW_FILES[@]}"; do
             mkdir -p "$(dirname "$TMP_DIR/$NEW_FILE")"
-            aws s3 cp $AWS_S3_FLAGS $DEBUG_FLAG "$S3_URL/$NEW_FILE" "$TMP_DIR/$NEW_FILE"
+            aws s3 cp $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG "$S3_URL/$NEW_FILE" "$TMP_DIR/$NEW_FILE"
             kubectl exec -n "$POD_NAMESPACE" "$POD_NAME" -- mkdir -p "$(dirname "$POD_PATH/$NEW_FILE")"
             kubectl cp "$TMP_DIR/$NEW_FILE" "$POD_NAMESPACE/$POD_NAME:$POD_PATH/$NEW_FILE"
           done
@@ -560,9 +556,9 @@ pipelines:
         # Local directory mode: Use native aws s3 sync
         echo && echo "Syncing S3 to local directory $LOCAL_DIR..."
         if [ "$CLEANUP" == "true" ]; then
-          aws s3 sync $AWS_S3_FLAGS $DEBUG_FLAG --delete "$S3_URL" "$LOCAL_DIR"
+          aws s3 sync $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG --delete "$S3_URL" "$LOCAL_DIR"
         else
-          aws s3 sync $AWS_S3_FLAGS $DEBUG_FLAG "$S3_URL" "$LOCAL_DIR"
+          aws s3 sync $AWS_S3_CHECKSUM_ALGORITHM_FLAG $DEBUG_FLAG "$S3_URL" "$LOCAL_DIR"
         fi
       fi
 
