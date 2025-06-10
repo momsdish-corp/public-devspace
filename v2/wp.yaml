@@ -12,6 +12,7 @@ imports:
   - path: s3.yaml
 
 pipelines:
+  # Restore a MySQL dump to the database from a local file or the latest dump
   wp-db-restore:
     flags:
       - name: asset
@@ -70,6 +71,7 @@ pipelines:
 
       echo "wp-db-restore completed."
 
+  # Only dump the database, without pushing to S3
   wp-db-dump:
     flags:
       - name: asset
@@ -94,6 +96,11 @@ pipelines:
       LOCAL_DIR="$(get_flag local-dir)"
       UPDATE_MARKER="$(get_flag update-marker)"
 
+      # Get mydumper flags
+      MYDUMPER_FLAGS=""
+      [ -n "$SYNC_THREAD_LOCK_MODE" ] && MYDUMPER_FLAGS="$MYDUMPER_FLAGS --sync-thread-lock-mode=$SYNC_THREAD_LOCK_MODE"
+      [ "$SKIP_TZ_UTC" = "true" ] && MYDUMPER_FLAGS="$MYDUMPER_FLAGS --skip-tz-utc"
+
       # If asset is empty, generate a default name
       if [ -z "$ASSET" ]; then
         ASSET="$(date +%Y/%m)/development-$(date -u +"%Y%m%dT%H%M%SZ")"
@@ -108,7 +115,7 @@ pipelines:
 
       # Dump the database
       echo "Dumping $MYSQL_DATABASE to $TMP_DIR..."
-      mydumper --outputdir=$TMP_DIR
+      mydumper --outputdir=$TMP_DIR "$MYDUMPER_FLAGS
 
       # Pack the dump
       mkdir -p $(dirname $LOCAL_DIR/$ASSET.tar.gz)
@@ -128,7 +135,7 @@ pipelines:
 
       echo "wp-db-dump completed."
 
-  # Pull the latest dump from the S3 bucket
+  # Pull & import the latest dump from the S3 bucket
   wp-db-pull:
     flags:
       - name: project-name
@@ -162,7 +169,7 @@ pipelines:
       
       echo "wp-db-pull completed."
 
-  # Push the latest dump to the S3 bucket
+  # Dump & push the dump to the S3 bucket
   wp-db-push:
     flags:
       - name: project-name
