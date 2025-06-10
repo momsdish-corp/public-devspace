@@ -115,8 +115,8 @@ pipelines:
 
       # Dump the database
       echo "Dumping $MYSQL_DATABASE to $TMP_DIR..."
-      echo "Running: mydumper --outputdir=$TMP_DIR $MYDUMPER_FLAGS"
-      mydumper --outputdir=$TMP_DIR "$MYDUMPER_FLAGS"
+      echo "Running: mydumper $MYDUMPER_FLAGS --outputdir=$TMP_DIR"
+      mydumper $MYDUMPER_FLAGS --outputdir=$TMP_DIR
 
       # Pack the dump
       mkdir -p $(dirname $LOCAL_DIR/$ASSET.tar.gz)
