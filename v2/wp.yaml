@@ -63,7 +63,7 @@ pipelines:
 
       # Restore the dump
       echo "Restoring $LOCAL_DIR/$ASSET..."
-      myloader --max-threads-for-schema-creation=1 --max-threads-per-table=1 --database=$MYSQL_DATABASE --directory=$TMP_DIR --overwrite-tables --verbose=3
+      myloader --max-threads-for-schema-creation=1 --max-threads-per-table=1 --database=$MYSQL_DATABASE --directory=$TMP_DIR --overwrite-tables --verbose=3 --defaults-file=/etc/mydumper.cnf
 
       # Cleanup
       echo "Cleaning up..."
