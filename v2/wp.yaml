@@ -98,8 +98,8 @@ pipelines:
 
       # Get mydumper flags
       MYDUMPER_FLAGS=""
-      [ -n "$SYNC_THREAD_LOCK_MODE" ] && MYDUMPER_FLAGS="$MYDUMPER_FLAGS --sync-thread-lock-mode=$SYNC_THREAD_LOCK_MODE"
-      [ "$SKIP_TZ_UTC" = "true" ] && MYDUMPER_FLAGS="$MYDUMPER_FLAGS --skip-tz-utc"
+      [ "$MYDUMPER_NO_LOCK" = "true" ] && MYDUMPER_FLAGS="$MYDUMPER_FLAGS --no-backup-locks --sync-thread-lock-mode=NO_LOCK"
+      [ "$MYDUMPER_SKIP_TZ_UTC" = "true" ] && MYDUMPER_FLAGS="$MYDUMPER_FLAGS --skip-tz-utc"
 
       # If asset is empty, generate a default name
       if [ -z "$ASSET" ]; then
