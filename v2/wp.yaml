@@ -115,6 +115,7 @@ pipelines:
 
       # Dump the database
       echo "Dumping $MYSQL_DATABASE to $TMP_DIR..."
+      echo "Running: mydumper --outputdir=$TMP_DIR $MYDUMPER_FLAGS"
       mydumper --outputdir=$TMP_DIR "$MYDUMPER_FLAGS"
 
       # Pack the dump
