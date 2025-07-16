@@ -16,7 +16,7 @@ pipelines:
         description: Fill path to the Dockerfile, relative to project dir. A .labels file will be created in the same directory as the Dockerfile.
         type: string
       - name: image-ref-label
-        description: "The name of the image label to use as a version reference point."
+        description: "The name of the image label to use as a version reference point (Used for commit messages)."
         type: string
         default: "org.opencontainers.image.ref.name"
       - name: log-commit-messages
