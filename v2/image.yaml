@@ -49,14 +49,18 @@ pipelines:
 
       # Define variables
       LABELS_FILE="$(dirname $DOCKERFILE)/.labels"
+      NEW_LABELS_FILE="$(mktemp)"
       IMAGE_NAME=$(basename $(dirname $DOCKERFILE))
 
       # Get the latest image labels
       echo "Fetching latest labels from $BASE_IMAGE"
       LATEST_IMAGE_LABELS="$(skopeo inspect docker://$BASE_IMAGE| jq -r '.Labels | to_entries | map(.key + ": " + .value) | .[]')"
+      echo "$LATEST_IMAGE_LABELS" > "$NEW_LABELS_FILE"
 
       echo "Comparing the latest labels with the currently used labels in $LABELS_FILE"
       echo
+
+      # Show current labels
       echo "Current labels:"
       if [ ! -f "$LABELS_FILE" ]; then
         echo "No labels file found."
@@ -65,27 +69,30 @@ pipelines:
       fi
 
       if [ ! -f $LABELS_FILE ] || [ "$LATEST_IMAGE_LABELS" != "$(cat "$LABELS_FILE")" ]; then
-        echo "$LATEST_IMAGE_LABELS" > "$LABELS_FILE"
-        echo
-        echo "New labels:"
-        echo "$LATEST_IMAGE_LABELS"
-
-        # Update the .labels file. Get old and new base image references
+        # Get old and new base image references
         BASE_IMAGE_REF="$(grep -oP "$IMAGE_REF_LABEL: \K.*" "${LABELS_FILE}" || true)"
         if [ -z "$BASE_IMAGE_REF" ]; then
-          echo "Unable to find $IMAGE_REF_LABEL label and its value in ${LABELS_FILE}"
-          echo "Contents of ${LABELS_FILE}:"
+          echo "Unable to find $IMAGE_REF_LABEL label and its value in the original ${LABELS_FILE}"
+          echo "Contents of the original ${LABELS_FILE}:"
           cat ${LABELS_FILE}
           exit 1
         fi
-        echo "$LATEST_IMAGE_LABELS" > "$LABELS_FILE"
-        NEW_BASE_IMAGE_REF="$(grep -oP "${IMAGE_REF_LABEL}: \K.*" "${LABELS_FILE}")"
+        
+        NEW_BASE_IMAGE_REF="$(grep -oP "${IMAGE_REF_LABEL}: \K.*" "${NEW_LABELS_FILE}")"
         if [ -z "$NEW_BASE_IMAGE_REF" ]; then
-          echo "Unable to find $IMAGE_REF_LABEL label and its value in the new ${LABELS_FILE}"
-          echo "Contents of the new ${LABELS_FILE}:"
-          cat ${LABELS_FILE}
+          echo "Unable to find $IMAGE_REF_LABEL label and its value in the new image labels"
+          echo "Contents of the new image labels:"
+          cat "${NEW_LABELS_FILE}"
           exit 1
         fi
+
+        # Show latest labels
+        echo "New labels:"
+        cat "${NEW_LABELS_FILE}"
+
+        # Update the .labels file
+        echo "Updating the ${LABELS_FILE} to new labels."
+        cat "$NEW_LABELS_FILE" > "$LABELS_FILE"
 
         # If LOG_COMMIT_MESSAGES is set, log the changes
         if [ -n "$LOG_COMMIT_MESSAGES" ]; then
