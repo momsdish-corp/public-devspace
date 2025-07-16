@@ -17,7 +17,7 @@ pipelines:
         type: string
       - name: image-ref-label
         description: "The name of the image label to use as a version reference point."
-        tyle: string
+        type: string
         default: "org.opencontainers.image.ref.name"
       - name: log-commit-messages
         description: "Output directory for the git commit logs. If set, creates a file with commit message and all changed assets."
