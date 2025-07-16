@@ -76,7 +76,7 @@ pipelines:
           echo "Unable to find $IMAGE_REF_LABEL label and its value in ${LABELS_FILE}"
           echo "Contents of ${LABELS_FILE}:"
           cat ${LABELS_FILE}
-          echo 1
+          exit 1
         fi
         echo "$LATEST_IMAGE_LABELS" > "$LABELS_FILE"
         NEW_BASE_IMAGE_REF="$(grep -oP "${IMAGE_REF_LABEL}: \K.*" "${LABELS_FILE}")"
@@ -84,7 +84,7 @@ pipelines:
           echo "Unable to find $IMAGE_REF_LABEL label and its value in the new ${LABELS_FILE}"
           echo "Contents of the new ${LABELS_FILE}:"
           cat ${LABELS_FILE}
-          echo 1
+          exit 1
         fi
 
         # If LOG_COMMIT_MESSAGES is set, log the changes
