@@ -67,18 +67,18 @@ pipelines:
         cat $LABELS_FILE
       fi
 
-      if [ ! -f $LABELS_FILE ] || [ "$LATEST_IMAGE_LABELS" != "$(cat "$LABELS_FILE")" ]; then
+      if [ ! -f $LABELS_FILE ] || [ "$(cat "$LABELS_FILE")" != "$(cat "$NEW_LABELS_FILE")" ]; then
         # Get old and new base image references
         BASE_IMAGE_REF="$(grep -oP "$IMAGE_REF_LABEL: \K.*" "${LABELS_FILE}" || true)"
         if [ -z "$BASE_IMAGE_REF" ]; then
           echo
           echo "Unable to find $IMAGE_REF_LABEL label and its value in the original ${LABELS_FILE}"
           echo "Contents of the original ${LABELS_FILE}:"
-          cat ${LABELS_FILE}
+          cat "${LABELS_FILE}"
           exit 1
         fi
         
-        NEW_BASE_IMAGE_REF="$(grep -oP "${IMAGE_REF_LABEL}: \K.*" "${NEW_LABELS_FILE}")"
+        NEW_BASE_IMAGE_REF="$(grep -oP "$IMAGE_REF_LABEL: \K.*" "${NEW_LABELS_FILE}")"
         if [ -z "$NEW_BASE_IMAGE_REF" ]; then
           echo
           echo "Unable to find $IMAGE_REF_LABEL label and its value in the new image labels"
