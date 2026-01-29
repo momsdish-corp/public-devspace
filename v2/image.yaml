@@ -63,12 +63,10 @@ pipelines:
 
       echo "Comparing the current sha with the new sha..."
       
-      echo "Current sha:"
-      [ -z "$CURRENT_SHA" ] && echo "none" || echo "$CURRENT_SHA"
+      [ -z "$CURRENT_SHA" ] && echo "Current sha: none" || echo "Current sha: $CURRENT_SHA"
 
       if [ -z "$CURRENT_SHA" ] || [ "$CURRENT_SHA" != "$NEW_SHA" ]; then
-        echo "New sha:"
-        echo "$NEW_SHA"
+        echo "New sha: $NEW_SHA"
 
         echo "Saving new sha to ${BASE_SHA_FILE}..."
         echo "$NEW_SHA" > "$BASE_SHA_FILE"
