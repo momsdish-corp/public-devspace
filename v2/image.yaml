@@ -10,6 +10,86 @@ imports:
   - path: base.yaml
 
 pipelines:
+
+  image-update-sha:
+    flags:
+      - name: dockerfile
+        description: Fill path to the Dockerfile, relative to project dir. A .labels file will be created in the same directory as the Dockerfile.
+        type: string
+      - name: log-commit-messages
+        description: "Output directory for the git commit logs. If set, creates a file with commit message and all changed assets."
+        type: string
+    run: |-
+      # Requirements
+      require_cmds skopeo jq
+
+      # Get flags
+      DOCKERFILE="$(get_flag dockerfile)"
+      LOG_COMMIT_MESSAGES="$(get_flag log-commit-messages)"
+
+      # Require vars
+      require_vars DOCKERFILE
+
+      # Validate
+      if [ ! -f "$DOCKERFILE" ]; then
+        echo "Dockerfile not found in $DOCKERFILE"
+        exit 1
+      fi
+
+      # Get Base Image from the Dockerfile
+      # First attempt to extract BASE_IMAGE_NAME and BASE_IMAGE_TAG
+      BASE_IMAGE_NAME="$(grep -E "^ARG BASE_IMAGE_NAME=" "$DOCKERFILE" | head -1 | cut -d'=' -f2)"
+      BASE_IMAGE_TAG="$(grep -E "^ARG BASE_IMAGE_TAG=" "$DOCKERFILE" | head -1 | cut -d'=' -f2)"
+      if [[ -n "$BASE_IMAGE_NAME" && -n "$BASE_IMAGE_TAG" ]]; then
+        BASE_IMAGE="${BASE_IMAGE_NAME}:${BASE_IMAGE_TAG}"
+      else
+        echo "Can not find the base image in $DOCKERFILE. Make sure to set BASE_IMAGE_NAME and BASE_IMAGE_TAG ARGs."
+        exit 1
+      fi
+
+      # Define variables
+      IMAGE_NAME="$(basename "$(dirname "$DOCKERFILE")")"
+      BASE_SHA_FILE="$(dirname "$DOCKERFILE")/.base-sha"
+
+      # Get the current sha
+      CURRENT_SHA="$(cat "$BASE_SHA_FILE" 2>/dev/null)"
+      CURRENT_SHA_SHORT="${CURRENT_SHA:0:14}"
+
+      # Get the new sha
+      echo "Fetching newest sha from $BASE_IMAGE"
+      NEW_SHA="$(skopeo inspect "docker://$BASE_IMAGE" | jq -r '.Digest')"
+      [[ -z "$NEW_SHA" ]] && echo "Error! Unable to fetch the newest sha. Exiting..." && exit 1
+      NEW_SHA_SHORT="${NEW_SHA:0:14}"
+
+      echo "Comparing the current sha with the new sha..."
+      
+      echo "Current sha:"
+      [ -z "$CURRENT_SHA" ] && echo "none" || echo "$CURRENT_SHA"
+
+      if [ -z "$CURRENT_SHA" ] || [ "$CURRENT_SHA" != "$NEW_SHA" ]; then
+        echo "New sha:"
+        echo "$NEW_SHA"
+
+        echo "Setting new sha to ${BASE_SHA_FILE}..."
+        echo "$NEW_SHA" > "$BASE_SHA_FILE"
+
+        # If LOG_COMMIT_MESSAGES is set, log the changes
+        if [ -n "$LOG_COMMIT_MESSAGES" ]; then
+          # Make sure the directory exists
+          mkdir -p "$LOG_COMMIT_MESSAGES"
+
+          # Log the changes
+          LOG_FILE="$LOG_COMMIT_MESSAGES/$(date +%s)-sha.log"
+
+          touch "$LOG_FILE"
+          echo "Update $IMAGE_NAME sha from $CURRENT_SHA_SHORT to $NEW_SHA_SHORT" >> "$LOG_FILE"
+          echo "$BASE_SHA_FILE" >> "$LOG_FILE"
+        fi
+
+        echo "Sha updated."
+      else
+        echo "No changes to sha."
+      fi
   image-update-labels:
     flags:
       - name: dockerfile
@@ -41,15 +121,7 @@ pipelines:
       fi
 
       # Get Base Image from the Dockerfile
-      # First attempt to extract BASE_IMAGE_NAME and BASE_IMAGE_TAG
-      BASE_IMAGE_NAME=$(grep -E "^ARG BASE_IMAGE_NAME=" "$DOCKERFILE" | head -1 | cut -d'=' -f2)
-      BASE_IMAGE_TAG=$(grep -E "^ARG BASE_IMAGE_TAG=" "$DOCKERFILE" | head -1 | cut -d'=' -f2)
-      if [[ -n "$BASE_IMAGE_NAME" && -n "$BASE_IMAGE_TAG" ]]; then
-        BASE_IMAGE="${BASE_IMAGE_NAME}:${BASE_IMAGE_TAG}"
-      else
-        # Fallback to checking the first image
-        BASE_IMAGE=$(grep '^FROM' "$DOCKERFILE" | head -n1 | awk '{print $2}' | cut -d' ' -f1)  
-      fi      
+      BASE_IMAGE=$(grep '^FROM' "$DOCKERFILE" | head -n1 | awk '{print $2}' | cut -d' ' -f1)     
       
       if [ -z "$BASE_IMAGE" ]; then
         echo "Can not find the base image in $DOCKERFILE"
@@ -106,18 +178,18 @@ pipelines:
 
         # If LOG_COMMIT_MESSAGES is set, log the changes
         if [ -n "$LOG_COMMIT_MESSAGES" ]; then
-            # Make sure the directory exists
-            mkdir -p $LOG_COMMIT_MESSAGES
+          # Make sure the directory exists
+          mkdir -p $LOG_COMMIT_MESSAGES
 
-            # Log the changes
-            LOG_FILE="$LOG_COMMIT_MESSAGES/$(date +%s)-labels.log"
+          # Log the changes
+          LOG_FILE="$LOG_COMMIT_MESSAGES/$(date +%s)-labels.log"
 
-            touch "$LOG_FILE"
-            echo "Update $IMAGE_NAME labels from $BASE_IMAGE_REF to $NEW_BASE_IMAGE_REF" >> "$LOG_FILE"
-            echo "$LABELS_FILE" >> "$LOG_FILE"
-          fi
+          touch "$LOG_FILE"
+          echo "Update $IMAGE_NAME labels from $BASE_IMAGE_REF to $NEW_BASE_IMAGE_REF" >> "$LOG_FILE"
+          echo "$LABELS_FILE" >> "$LOG_FILE"
+        fi
 
-        echo "$LOG_COMMIT_MESSAGES updated."
+        echo "Labels updated."
       else
         echo "No changes to labels."
       fi
