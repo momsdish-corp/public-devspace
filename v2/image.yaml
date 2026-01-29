@@ -40,8 +40,17 @@ pipelines:
         exit 1
       fi
 
-      # Extract the base image name from dockerfile
-      BASE_IMAGE=$(grep '^FROM' "$DOCKERFILE" | head -n1 | awk '{print $2}' | cut -d' ' -f1)
+      # Get Base Image from the Dockerfile
+      # First attempt to extract BASE_IMAGE_NAME and BASE_IMAGE_TAG
+      BASE_IMAGE_NAME=$(grep -E "^ARG BASE_IMAGE_NAME=" "$DOCKERFILE" | head -1 | cut -d'=' -f2)
+      BASE_IMAGE_TAG=$(grep -E "^ARG BASE_IMAGE_TAG=" "$DOCKERFILE" | head -1 | cut -d'=' -f2)
+      if [[ -n "$BASE_IMAGE_NAME" && -n "$BASE_IMAGE_TAG" ]]; then
+        BASE_IMAGE="${BASE_IMAGE_NAME}:${BASE_IMAGE_TAG}"
+      else
+        # Fallback to checking the first image
+        BASE_IMAGE=$(grep '^FROM' "$DOCKERFILE" | head -n1 | awk '{print $2}' | cut -d' ' -f1)  
+      fi      
+      
       if [ -z "$BASE_IMAGE" ]; then
         echo "Can not find the base image in $DOCKERFILE"
         exit 1
