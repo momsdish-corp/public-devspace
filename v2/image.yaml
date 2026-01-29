@@ -40,7 +40,7 @@ pipelines:
       # First attempt to extract BASE_IMAGE_NAME and BASE_IMAGE_TAG
       BASE_IMAGE_NAME="$(grep -E "^ARG BASE_IMAGE_NAME=" "$DOCKERFILE" | head -1 | cut -d'=' -f2)"
       BASE_IMAGE_TAG="$(grep -E "^ARG BASE_IMAGE_TAG=" "$DOCKERFILE" | head -1 | cut -d'=' -f2)"
-      if [[ -n "$BASE_IMAGE_NAME" && -n "$BASE_IMAGE_TAG" ]]; then
+      if [ -n "$BASE_IMAGE_NAME" ] && [ -n "$BASE_IMAGE_TAG" ]; then
         BASE_IMAGE="${BASE_IMAGE_NAME}:${BASE_IMAGE_TAG}"
       else
         echo "Can not find the base image in $DOCKERFILE. Make sure to set BASE_IMAGE_NAME and BASE_IMAGE_TAG ARGs."
@@ -58,7 +58,7 @@ pipelines:
       # Get the new sha
       echo "Fetching newest sha from $BASE_IMAGE"
       NEW_SHA="$(skopeo inspect "docker://$BASE_IMAGE" | jq -r '.Digest')"
-      [[ -z "$NEW_SHA" ]] && echo "Error! Unable to fetch the newest sha. Exiting..." && exit 1
+      [ -z "$NEW_SHA" ] && echo "Error! Unable to fetch the newest sha. Exiting..." && exit 1
       NEW_SHA_SHORT="${NEW_SHA:0:14}"
 
       echo "Comparing the current sha with the new sha..."
