@@ -20,14 +20,13 @@ pipelines:
         description: "Output directory for the git commit logs. If set, creates a file with commit message and all changed assets."
         type: string
     run: |-
-      set -x
-        
       # Requirements
       require_cmds skopeo jq
 
       # Get flags
       DOCKERFILE="$(get_flag dockerfile)"
       LOG_COMMIT_MESSAGES="$(get_flag log-commit-messages)"
+      set -x
 
       # Require vars
       require_vars DOCKERFILE
