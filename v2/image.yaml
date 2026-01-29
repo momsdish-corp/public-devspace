@@ -52,7 +52,7 @@ pipelines:
       BASE_SHA_FILE="$(dirname "$DOCKERFILE")/.base-sha"
 
       # Get the current sha
-      CURRENT_SHA="$(cat "$BASE_SHA_FILE" 2>/dev/null)"
+      [ -f "$BASE_SHA_FILE" ] && CURRENT_SHA="$(cat "$BASE_SHA_FILE")" || CURRENT_SHA=""
       CURRENT_SHA_SHORT="$(echo "$CURRENT_SHA" | cut -c1-14)"
 
       # Get the new sha
