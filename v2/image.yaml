@@ -70,7 +70,7 @@ pipelines:
         echo "New sha:"
         echo "$NEW_SHA"
 
-        echo "Setting new sha to ${BASE_SHA_FILE}..."
+        echo "Saving new sha to ${BASE_SHA_FILE}..."
         echo "$NEW_SHA" > "$BASE_SHA_FILE"
 
         # If LOG_COMMIT_MESSAGES is set, log the changes
