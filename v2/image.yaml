@@ -53,13 +53,13 @@ pipelines:
 
       # Get the current sha
       CURRENT_SHA="$(cat "$BASE_SHA_FILE" 2>/dev/null)"
-      CURRENT_SHA_SHORT="${CURRENT_SHA:0:14}"
+      CURRENT_SHA_SHORT="$(echo "$CURRENT_SHA" | cut -c1-14)"
 
       # Get the new sha
       echo "Fetching newest sha from $BASE_IMAGE"
       NEW_SHA="$(skopeo inspect "docker://$BASE_IMAGE" | jq -r '.Digest')"
       [ -z "$NEW_SHA" ] && echo "Error! Unable to fetch the newest sha. Exiting..." && exit 1
-      NEW_SHA_SHORT="${NEW_SHA:0:14}"
+      NEW_SHA_SHORT="$(echo "$NEW_SHA" | cut -c1-14)"
 
       echo "Comparing the current sha with the new sha..."
       
