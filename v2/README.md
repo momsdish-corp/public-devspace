@@ -38,4 +38,4 @@ plugins:
         load: 4000
 ```
 
-Run `devspace test ./test.yaml` to perform the test.
+Run `devspace website-test ./test.yaml` to perform the test.
