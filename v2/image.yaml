@@ -26,7 +26,6 @@ pipelines:
       # Get flags
       DOCKERFILE="$(get_flag dockerfile)"
       LOG_COMMIT_MESSAGES="$(get_flag log-commit-messages)"
-      set -x
 
       # Require vars
       require_vars DOCKERFILE
