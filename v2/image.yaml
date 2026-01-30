@@ -48,6 +48,7 @@ pipelines:
       fi
 
       # Define variables
+      # - the folder container the Dockerfile, i.e. wordpress, nginx, etc...
       IMAGE_NAME="$(basename "$(dirname "$DOCKERFILE")")"
       BASE_SHA_FILE="$(dirname "$DOCKERFILE")/.base-sha"
 
@@ -77,7 +78,7 @@ pipelines:
           mkdir -p "$LOG_COMMIT_MESSAGES"
 
           # Log the changes
-          LOG_FILE="$LOG_COMMIT_MESSAGES/$(date +%s)-sha.log"
+          LOG_FILE="$LOG_COMMIT_MESSAGES/$(date +%s)-${IMAGE_NAME}-sha.log"
 
           touch "$LOG_FILE"
           echo "Update $IMAGE_NAME sha from $CURRENT_SHA_SHORT to $NEW_SHA_SHORT" >> "$LOG_FILE"
